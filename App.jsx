@@ -199,7 +199,9 @@ export default function App() {
     // Listener para Estudiantes
     const studentsQuery = query(collection(db, ...dataBasePath, 'students'));
     const unsubscribeStudents = onSnapshot(studentsQuery, (snapshot) => {
-      setStudents(snapshotToArray(snapshot));
+      const studentData = snapshotToArray(snapshot);
+      studentData.sort((a, b) => (a.dni || "").localeCompare(b.dni || ""));
+      setStudents(studentData);
     }, (error) => {
       console.error("Error al cargar estudiantes:", error);
       showMessage(`Error al cargar estudiantes: ${error.message}`, true);
@@ -215,10 +217,11 @@ export default function App() {
     });
 
     // Listener para Matriculaciones (para el listado en 'Matricular')
-    const currentYear = new Date().getFullYear().toString();
+    // (FIX) AHORA CARGA TODAS LAS MATRICULACIONES, no solo las del año en curso,
+    // para que la lógica de "Ingresar Nota" y "Planilla" funcione
     const matriculationQuery = query(
-        collection(db, ...dataBasePath, 'matriculation'),
-        where("cicloLectivo", "==", currentYear)
+        collection(db, ...dataBasePath, 'matriculation')
+        // where("cicloLectivo", "==", currentYear) // Eliminamos este filtro
     );
     
     const unsubscribeMatriculaciones = onSnapshot(matriculationQuery, (snapshot) => {
@@ -425,7 +428,6 @@ export default function App() {
           materias={materias}
           notasSubTab={notasSubTab}
           setNotasSubTab={setNotasSubTab}
-          // (FIX) Pasar la función como prop
           snapshotToArray={snapshotToArray}
         />
       )}
@@ -719,7 +721,8 @@ const AdminDashboardScreen = ({
                 appId={appId}
                 showMessage={showMessage}
                 materias={materias}
-                students={students}
+                students={students} 
+                matriculaciones={matriculaciones} // (NUEVO) Pasar matriculaciones
                 notasSubTab={notasSubTab}
                 setNotasSubTab={setNotasSubTab}
                 snapshotToArray={snapshotToArray} // (FIX) Pasar la prop
@@ -754,7 +757,7 @@ const AdminDashboardScreen = ({
  * Pestaña 4: Gestión de Notas (Contenedor Principal)
  */
 const NotasTab = ({ 
-    db, appId, showMessage, materias, students, 
+    db, appId, showMessage, materias, students, matriculaciones,
     notasSubTab, setNotasSubTab, snapshotToArray // (FIX) Recibir prop
 }) => {
   return (
@@ -790,14 +793,19 @@ const NotasTab = ({
             appId={appId}
             showMessage={showMessage}
             materias={materias}
+            matriculaciones={matriculaciones} // (NUEVO) Pasar matriculaciones
             snapshotToArray={snapshotToArray} // (FIX) Pasar la prop
         />
       )}
       {notasSubTab === 'ingresar_planilla' && (
-        <div className="p-8 bg-green-50 border border-green-300 rounded-lg text-center">
-            <h3 className="text-xl font-semibold">Ingresar Planilla</h3>
-            <p className="mt-2 text-gray-600">Este módulo permitirá seleccionar una materia/plan y cargar notas para múltiples alumnos (tipo planilla).</p>
-        </div>
+        <IngresarPlanilla
+            db={db}
+            appId={appId}
+            showMessage={showMessage}
+            materias={materias}
+            students={students}
+            matriculaciones={matriculaciones} // (NUEVO) Pasar matriculaciones
+        />
       )}
       {notasSubTab === 'ingresar_analitico' && (
         <div className="p-8 bg-purple-50 border border-purple-300 rounded-lg text-center">
@@ -813,13 +821,13 @@ const NotasTab = ({
  * Sub-Pestaña 4.1: Ingresar Nota Individual
  */
 const IngresarNotaIndividual = ({ 
-    db, appId, showMessage, materias, snapshotToArray // (FIX) Recibir prop
+    db, appId, showMessage, materias, matriculaciones, snapshotToArray // (FIX) Recibir prop
 }) => {
     const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Cargar Nota
     const [dniSearch, setDniSearch] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
     
-    const [foundMatriculas, setFoundMatriculas] = useState([]); // Almacena las matrículas (planes) encontradas
+    const [foundMatriculas, setFoundMatriculas] = useState([]); // Almacena los planes (strings)
     const [selectedPlan, setSelectedPlan] = useState(''); // El plan (ej: '530 Arpa')
     const [studentInfo, setStudentInfo] = useState({ dni: '', nombres: '', apellidos: '' }); // Info del alumno
     
@@ -852,25 +860,21 @@ const IngresarNotaIndividual = ({
         setStudentInfo({ dni: '', nombres: '', apellidos: '' });
 
         try {
-            const matriculaRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
-            const q = query(matriculaRef, where("dni", "==", dniSearch));
-            const querySnapshot = await getDocs(q);
+            // (FIX) Usar la lista 'matriculaciones' que ya tenemos en lugar de hacer un query
+            const matriculasDelDNI = matriculaciones.filter(m => m.dni === dniSearch);
 
-            if (querySnapshot.empty) {
+            if (matriculasDelDNI.length === 0) {
                 showMessage(`DNI ${dniSearch} no encontrado en ninguna matriculación.`, true);
                 setStep(1);
             } else {
-                // (FIX) Usar la prop
-                const matriculas = snapshotToArray(querySnapshot); 
-                
                 // Usar un Set para obtener planes únicos
-                const planesUnicos = [...new Set(matriculas.map(m => m.plan))];
+                const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
                 
                 // Guardar datos del alumno (del primer registro)
                 setStudentInfo({
-                    dni: matriculas[0].dni,
-                    nombres: matriculas[0].nombres,
-                    apellidos: matriculas[0].apellidos
+                    dni: matriculasDelDNI[0].dni,
+                    nombres: matriculasDelDNI[0].nombres,
+                    apellidos: matriculasDelDNI[0].apellidos
                 });
 
                 if (planesUnicos.length > 1) {
@@ -883,7 +887,7 @@ const IngresarNotaIndividual = ({
                     setSelectedPlan(plan);
                     setStep(3);
                 }
-                showMessage(`Estudiante ${matriculas[0].nombres} ${matriculas[0].apellidos} encontrado.`, false);
+                showMessage(`Estudiante ${studentInfo.nombres} ${studentInfo.apellidos} encontrado.`, false);
             }
         } catch (error) {
             console.error("Error buscando DNI en matriculación:", error);
@@ -1191,6 +1195,438 @@ const IngresarNotaIndividual = ({
     );
 };
 
+/**
+ * (NUEVO) Sub-Pestaña 4.2: Ingresar Planilla
+ * (Actualizado con la nueva lógica)
+ */
+const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matriculaciones }) => {
+    
+    // Nombres únicos de materias (alfabético)
+    const uniqueMaterias = useMemo(() => {
+        const names = new Set(materias.map(m => m.materia));
+        return [...names].sort();
+    }, [materias]);
+
+    // (FIX 1) Opciones para el desplegable de DNI (desde matriculaciones)
+    const studentOptions = useMemo(() => {
+        const uniqueStudents = new Map();
+        
+        // (FIX) Usar 'matriculaciones' (TODAS) en lugar de filtrar por año actual.
+        // Esto asegura que podamos cargar notas para alumnos de años anteriores
+        // o que no se matricularon este año pero rindieron examen.
+        // const matriculacionesActuales = matriculaciones.filter(m => m.cicloLectivo === new Date().getFullYear().toString());
+        
+        matriculaciones.forEach(m => {
+            if (!uniqueStudents.has(m.dni)) {
+                uniqueStudents.set(m.dni, {
+                    value: m.dni,
+                    label: `${m.dni} - ${m.apellidos}, ${m.nombres}`,
+                    nombres: m.nombres,
+                    apellidos: m.apellidos
+                });
+            }
+        });
+        // Ordenar por DNI
+        return [...uniqueStudents.values()].sort((a, b) => a.value.localeCompare(b.value));
+    }, [matriculaciones]);
+
+    const materiasCondicionales = [
+        'optativa 1', 'optativa 2', 
+        'ensamble 1', 'ensamble 2', 'ensamble 3', 'ensamble 4'
+    ];
+    
+    // Estado
+    const [commonData, setCommonData] = useState({
+        materiaName: '', // Nombre de la materia
+        obs_optativa_ensamble: '',
+        fecha: new Date().toISOString().split('T')[0],
+        libro_folio: '',
+        condicion: 'Promoción',
+        observaciones: ''
+    });
+    const [showObsField, setShowObsField] = useState(false);
+    const [studentCount, setStudentCount] = useState('');
+    const [planillaRows, setPlanillaRows] = useState([]); // Array de { id, dni, nombres, apellidos, nota }
+    const [loading, setLoading] = useState(false);
+
+    // Manejar cambio en formulario común
+    const handleCommonChange = (e) => {
+        const { name, value } = e.target;
+        setCommonData(prev => ({ ...prev, [name]: value }));
+    };
+
+    // Manejar cambio de materia (para campo condicional)
+    const handleMateriaChange = (e) => {
+        const materiaNombre = e.target.value;
+        setCommonData(prev => ({ ...prev, materiaName: materiaNombre, obs_optativa_ensamble: '' }));
+        
+        if (materiaNombre && materiasCondicionales.includes(materiaNombre.toLowerCase())) {
+            setShowObsField(true);
+        } else {
+            setShowObsField(false);
+        }
+    };
+
+    // Generar las filas
+    const handleGenerateRows = (e) => {
+        e.preventDefault();
+        const count = parseInt(studentCount, 10);
+        if (isNaN(count) || count <= 0) {
+            return showMessage("Ingrese un número válido de estudiantes.", true);
+        }
+        
+        const newRows = Array(count).fill(null).map((_, index) => ({
+            id: index,
+            dni: '',
+            nombres: '',
+            apellidos: '',
+            nota: ''
+        }));
+        setPlanillaRows(newRows);
+    };
+
+    // Manejar cambio en una fila
+    const handleRowChange = (index, field, value) => {
+        const newRows = [...planillaRows];
+        const row = newRows[index];
+        row[field] = value;
+        
+        // Si el campo es DNI, autocompletar
+        if (field === 'dni') {
+            const student = studentOptions.find(s => s.value === value);
+            if (student) {
+                row.nombres = student.nombres;
+                row.apellidos = student.apellidos;
+            } else {
+                row.nombres = '';
+                row.apellidos = '';
+            }
+        }
+        setPlanillaRows(newRows);
+    };
+
+    // (FIX 2) Guardar la planilla con la lógica de planes
+    const handleSavePlanilla = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+
+        const { materiaName, ...commonFields } = commonData;
+
+        if (!materiaName) {
+            setLoading(false);
+            return showMessage("Debe seleccionar una materia.", true);
+        }
+        
+        const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
+        const savePromises = [];
+        let notasGuardadas = 0;
+        let advertencias = [];
+
+        try {
+            for (const row of planillaRows) {
+                if (!row.dni || !row.nota) {
+                    throw new Error(`La fila ${row.id + 1} (DNI: ${row.dni}) está incompleta (falta DNI o Nota).`);
+                }
+
+                // (NUEVO) Lógica de Plan
+                // 1. Encontrar todos los planes para este DNI en matriculaciones (de CUALQUIER año)
+                const planesDelEstudiante = [...new Set(
+                    matriculaciones
+                        .filter(m => m.dni === row.dni)
+                        .map(m => m.plan)
+                )];
+
+                if (planesDelEstudiante.length === 0) {
+                    advertencias.push(`DNI ${row.dni} (${row.apellidos}) no tiene planes de matriculación. No se guardó nota.`);
+                    continue;
+                }
+
+                let notaGuardadaParaEsteAlumno = false;
+
+                // 2. Por cada plan, verificar si la materia existe
+                for (const plan of planesDelEstudiante) {
+                    const materiaExisteEnPlan = materias.some(m => m.plan === plan && m.materia === materiaName);
+
+                    // 3. Si existe, registrar la nota para ESE plan
+                    if (materiaExisteEnPlan) {
+                        const notaData = {
+                            ...commonFields, // fecha, libro_folio, condicion, obs, obs_optativa...
+                            materia: materiaName,
+                            dni: row.dni,
+                            apellidos: row.apellidos,
+                            nombres: row.nombres,
+                            nota: row.nota,
+                            plan: plan, // <-- (FIX) Se asigna el plan correcto
+                            timestamp: Timestamp.now()
+                        };
+                        
+                        savePromises.push(addDoc(notasRef, notaData));
+                        notaGuardadaParaEsteAlumno = true;
+                    }
+                } // fin loop planes
+
+                if (notaGuardadaParaEsteAlumno) {
+                    notasGuardadas++;
+                } else {
+                    // Si la materia no existe en NINGUNO de los planes del alumno
+                    advertencias.push(`Materia '${materiaName}' no existe en los planes de ${row.apellidos}. No se guardó nota.`);
+                }
+
+            } // fin loop rows
+
+            // Esperar que todas las notas válidas se guarden
+            await Promise.all(savePromises);
+            
+            if (notasGuardadas > 0) {
+                showMessage(`Planilla procesada. ${notasGuardadas} notas guardadas exitosamente.`, false);
+                if (advertencias.length > 0) {
+                    // Mostrar advertencias si las hubo
+                    setTimeout(() => alert("Advertencias:\n" + advertencias.join("\n")), 100);
+                }
+                resetForm();
+            } else if (planillaRows.length > 0) {
+                // No se guardó nada, pero no hubo un error
+                showMessage("Se procesó la planilla, pero no se guardó ninguna nota (la materia podría no existir en los planes de los alumnos).", true);
+                alert("Advertencias:\n" + advertencias.join("\n"));
+            } else {
+                showMessage("No había filas para procesar.", false);
+            }
+
+        } catch (error) {
+            console.error("Error al guardar planilla:", error);
+            showMessage(`Error: ${error.message}`, true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    // Resetear formulario
+    const resetForm = () => {
+        setCommonData({
+            materiaName: '',
+            obs_optativa_ensamble: '',
+            fecha: new Date().toISOString().split('T')[0],
+            libro_folio: '',
+            condicion: 'Promoción',
+            observaciones: ''
+        });
+        setShowObsField(false);
+        setStudentCount('');
+        setPlanillaRows([]);
+        setLoading(false);
+    };
+
+
+    return (
+        <div className="max-w-4xl mx-auto">
+            {/* 1. Formulario de Datos Comunes */}
+            <form onSubmit={handleSavePlanilla} className="p-6 bg-white rounded-lg shadow-md border space-y-4">
+                <h3 className="text-xl font-semibold text-gray-800">Cargar Planilla de Notas</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Materia (Nombres Únicos) */}
+                    <div>
+                        <label htmlFor="materiaName" className="block text-sm font-medium text-gray-700">Materia</label>
+                        <select 
+                            id="materiaName" 
+                            name="materiaName"
+                            value={commonData.materiaName}
+                            onChange={handleMateriaChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            required
+                        >
+                            <option value="">Seleccione materia...</option>
+                            {uniqueMaterias.map(name => (
+                                <option key={name} value={name}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Campo Condicional (Optativa/Ensamble) */}
+                    {showObsField && (
+                        <div>
+                            <label htmlFor="obs_optativa_ensamble" className="block text-sm font-medium text-gray-700">Especifique Optativa/Ensamble</label>
+                            <input 
+                                type="text" 
+                                id="obs_optativa_ensamble"
+                                name="obs_optativa_ensamble"
+                                value={commonData.obs_optativa_ensamble}
+                                onChange={handleCommonChange}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                placeholder="Ej: Ensamble de Rock"
+                                required
+                            />
+                        </div>
+                    )}
+                    
+                    {/* Fecha */}
+                    <div>
+                        <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">Fecha</label>
+                        <input 
+                            type="date" 
+                            id="fecha"
+                            name="fecha"
+                            value={commonData.fecha}
+                            onChange={handleCommonChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            required
+                        />
+                    </div>
+
+                    {/* Condición */}
+                    <div>
+                        <label htmlFor="condicion" className="block text-sm font-medium text-gray-700">Condición</label>
+                        <select 
+                            id="condicion" 
+                            name="condicion"
+                            value={commonData.condicion}
+                            onChange={handleCommonChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            required
+                        >
+                            <option>Promoción</option>
+                            <option>Examen</option>
+                            <option>Equivalencia</option>
+                        </select>
+                    </div>
+
+                    {/* Libro/Folio */}
+                    <div>
+                        <label htmlFor="libro_folio" className="block text-sm font-medium text-gray-700">Libro y Folio</label>
+                        <input 
+                            type="text" 
+                            id="libro_folio"
+                            name="libro_folio"
+                            value={commonData.libro_folio}
+                            onChange={handleCommonChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="Ej: L1 F23"
+                        />
+                    </div>
+                </div>
+                
+                 {/* Observaciones */}
+                <div>
+                    <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700">Observaciones (para toda la planilla)</label>
+                    <textarea 
+                        id="observaciones"
+                        name="observaciones"
+                        rows="2"
+                        value={commonData.observaciones}
+                        onChange={handleCommonChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                        placeholder="Cualquier observación adicional..."
+                    ></textarea>
+                </div>
+
+                <div className="border-t pt-4"></div>
+
+                {/* 2. Generador de Filas */}
+                <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <label htmlFor="studentCount" className="block text-sm font-medium text-gray-700">Número de Estudiantes en Planilla</label>
+                    <div className="mt-1 flex space-x-2">
+                        <input 
+                            type="number" 
+                            id="studentCount"
+                            value={studentCount}
+                            onChange={(e) => setStudentCount(e.target.value)}
+                            className="w-48 rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="Ej: 10"
+                        />
+                        <button 
+                            type="button" 
+                            onClick={handleGenerateRows}
+                            className="font-medium py-3 px-5 rounded-lg shadow-md transition duration-200 bg-indigo-500 hover:bg-indigo-600 text-white"
+                        >
+                            Generar Filas
+                        </button>
+                    </div>
+                </div>
+
+                {/* 3. Tabla de Planilla (Dinámica) */}
+                {planillaRows.length > 0 && (
+                    <div className="mt-6">
+                        <h4 className="text-lg font-semibold text-gray-800 mb-3">Estudiantes a Calificar</h4>
+                        <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">DNI (Matriculados Año Actual)</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Apellidos</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Nombres</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Calificación *</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {planillaRows.map((row, index) => (
+                                        <tr key={row.id}>
+                                            {/* DNI (Desplegable) */}
+                                            <td className="px-2 py-1">
+                                                <select 
+                                                    value={row.dni}
+                                                    onChange={(e) => handleRowChange(index, 'dni', e.target.value)}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
+                                                    required
+                                                >
+                                                    <option value="">Seleccione DNI...</option>
+                                                    {studentOptions.map(s => (
+                                                        <option key={s.value} value={s.value}>{s.label}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                            {/* Apellidos (Auto) */}
+                                            <td className="px-2 py-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.apellidos} 
+                                                    className="w-full rounded-md p-2 bg-gray-100 border-gray-200"
+                                                    readOnly 
+                                                />
+                                            </td>
+                                            {/* Nombres (Auto) */}
+                                            <td className="px-2 py-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.nombres} 
+                                                    className="w-full rounded-md p-2 bg-gray-100 border-gray-200"
+                                                    readOnly 
+                                                />
+                                            </td>
+                                            {/* Nota (Editable) */}
+                                            <td className="px-2 py-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.nota}
+                                                    onChange={(e) => handleRowChange(index, 'nota', e.target.value)}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
+                                                    placeholder="Ej: 9"
+                                                    required
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {/* 4. Botón de Guardar Planilla */}
+                        <div className="border-t pt-6 mt-6">
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
+                            >
+                                {loading ? <IconLoading /> : `Guardar Planilla (${planillaRows.length} Notas)`}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </form>
+        </div>
+    );
+};
+
 
 /**
  * Pestaña 1: Inscribir / Editar Estudiante
@@ -1390,6 +1826,11 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
     const currentYear = new Date().getFullYear().toString();
     const currentDate = new Date().toISOString().split('T')[0];
 
+    // (FIX) Filtrar matriculaciones del año actual para el listado
+    const matriculacionesDelAnio = useMemo(() => {
+        return matriculaciones.filter(m => m.cicloLectivo === currentYear);
+    }, [matriculaciones, currentYear]);
+
     // Buscar estudiante por DNI (en 'students')
     const handleDniSearchMatricula = async (e) => {
         e.preventDefault();
@@ -1457,21 +1898,18 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
         };
 
         try {
-            // Validar que no exista ya
-            const matriculaRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
-            const q = query(
-                matriculaRef,
-                where("dni", "==", newMatricula.dni),
-                where("instrumento", "==", newMatricula.instrumento),
-                where("cicloLectivo", "==", newMatricula.cicloLectivo)
+            // (FIX) Validar contra la lista ya filtrada
+            const yaExiste = matriculacionesDelAnio.some(
+                m => m.dni === newMatricula.dni && 
+                     m.instrumento === newMatricula.instrumento
             );
-            const querySnapshot = await getDocs(q);
             
-            if (!querySnapshot.empty) {
+            if (yaExiste) {
                 return showMessage(`Error: ${newMatricula.nombres} ${newMatricula.apellidos} ya está matriculado/a en ${newMatricula.instrumento} este año.`, true);
             }
 
             // Guardar
+            const matriculaRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
             await addDoc(matriculaRef, newMatricula);
             showMessage(`Estudiante matriculado/a en ${newMatricula.instrumento} exitosamente.`, false);
             
@@ -1584,7 +2022,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
 
                 {/* Columna 2: Listado de Matriculados (Año en curso) */}
                 <div>
-                    <h2 className="text-2xl font-semibold text-gray-800 mb-4">Matriculados {currentYear} ({matriculaciones.length})</h2>
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-4">Matriculados {currentYear} ({matriculacionesDelAnio.length})</h2>
                     <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200 max-h-[70vh] overflow-y-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-indigo-600 text-white sticky top-0">
@@ -1596,7 +2034,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-100">
-                                {matriculaciones.length > 0 ? matriculaciones.map(m => (
+                                {matriculacionesDelAnio.length > 0 ? matriculacionesDelAnio.map(m => (
                                     <tr key={m.id} className="hover:bg-indigo-50">
                                         <td className="px-3 py-3 text-sm text-gray-700">{m.apellidos}</td>
                                         <td className="px-3 py-3 text-sm text-gray-700">{m.nombres}</td>
