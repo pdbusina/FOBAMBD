@@ -38,7 +38,6 @@ const firebaseConfig = {
 // --- Fin de la Configuración Manual ---
 
 // --- Estilos de Impresión (Para Analítico) ---
-// (AJUSTADO: Sin logo, alineación izquierda, con paginación)
 const printStyles = `
   @media print {
     body * {
@@ -61,51 +60,70 @@ const printStyles = `
     .no-print {
       display: none !important;
     }
-    /* Estilos de tabla para impresión */
-    table {
+    /* ... (resto de estilos del analítico) ... */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
+    th { background-color: #eee !important; }
+    tr { page-break-inside: avoid; }
+    h4 { page-break-before: auto; page-break-after: avoid; font-size: 12pt; font-weight: bold; margin-top: 10px; }
+    .print-page-break { page-break-before: always !important; }
+    .print-header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; text-align: left; }
+    .print-signatures { padding-top: 60px; text-align: center; }
+    .print-signature-line { border-top: 1px solid #000; padding-top: 4px; margin: 0 30px; }
+  }
+`;
+
+// --- (NUEVO) Estilos de Impresión (Para Certificado) ---
+const printStylesCertificate = `
+  @media print {
+    #certificate-print-area, #certificate-print-area * {
+      visibility: visible;
+    }
+    #certificate-print-area {
+      position: absolute;
+      left: 0;
+      top: 0;
       width: 100%;
-      border-collapse: collapse;
+      height: 100%;
+      padding: 0;
+      margin: 0;
     }
-    th, td {
-      border: 1px solid #000;
-      padding: 4px 6px;
-      text-align: left;
+    /* (NUEVO) Define el tamaño A5 (mitad A4 vertical) */
+    @page {
+      size: A5;
+      margin: 20mm; 
     }
-    th {
-      background-color: #eee !important;
-    }
-    /* Evitar saltos de página dentro de las filas */
-    tr {
-      page-break-inside: avoid;
-    }
-    /* Títulos de año */
-    h4 {
-      page-break-before: auto;
-      page-break-after: avoid;
+    .certificate-content {
+      width: 100%;
+      height: 100%; 
+      font-family: 'Times New Roman', Times, serif;
       font-size: 12pt;
+      line-height: 1.6;
+      color: #000;
+    }
+    .certificate-header {
+      text-align: center;
       font-weight: bold;
-      margin-top: 10px;
+      font-size: 14pt;
+      margin-bottom: 30px;
     }
-    /* (NUEVO) Clase para forzar salto de página */
-    .print-page-break {
-      page-break-before: always !important;
+    .certificate-body {
+      margin-top: 30px;
+      margin-bottom: 40px;
     }
-    /* Encabezado del analítico (AJUSTADO) */
-    .print-header {
-      border-bottom: 2px solid #000;
-      padding-bottom: 10px;
-      margin-bottom: 20px;
-      text-align: left; /* Alineación izquierda */
+    .certificate-footer {
+       margin-bottom: 40px;
     }
-    /* Pie de página de firmas */
-    .print-signatures {
-      padding-top: 60px; /* Más espacio para firmas */
+    .certificate-signatures {
+      padding-top: 50px;
+      display: flex;
+      justify-content: space-around;
       text-align: center;
     }
-    .print-signature-line {
+    .certificate-signature-line {
       border-top: 1px solid #000;
-      padding-top: 4px;
-      margin: 0 30px; /* Margen para las líneas */
+      width: 200px;
+      padding-top: 5px;
     }
   }
 `;
@@ -195,7 +213,8 @@ export default function App() {
   const [materias, setMaterias] = useState([]); // Para tabla Materias
   const [notas, setNotas] = useState([]); // (NUEVO) Para tabla Notas
   const [loading, setLoading] = useState(true);
-  const [appState, setAppState] = useState('landing'); // 'landing', 'student_access', 'admin_login', 'admin_dashboard'
+  // (AJUSTE) Añadir 'student_analitico'
+  const [appState, setAppState] = useState('landing'); // 'landing', 'student_access', 'student_analitico', 'admin_login', 'admin_dashboard'
   const [activeTab, setActiveTab] = useState('inscribir'); // Pestaña inicial de admin
   const [notasSubTab, setNotasSubTab] = useState('ingresar_nota'); // Para sub-pestañas de notas
   const [message, setMessage] = useState({ text: "", isError: false });
@@ -266,10 +285,11 @@ export default function App() {
   };
 
 
-  // --- Listener de Firestore (Real-Time) - SOLO PARA EL DASHBOARD ADMINISTRATIVO ---
+  // --- Listener de Firestore (Real-Time) ---
+  // (AJUSTADO) Estos listeners ahora cargan siempre, no solo en admin
   useEffect(() => {
-    // Solo se activa si estamos en el dashboard
-    if (!db || !userId || appState !== 'admin_dashboard') return;
+    // Se activa en cuanto hay BDD y Usuario
+    if (!db || !userId) return;
 
     // Camino base a la data (para cumplir con reglas de seguridad)
     const dataBasePath = ['artifacts', appId, 'public', 'data'];
@@ -288,13 +308,8 @@ export default function App() {
     // Listener para Instrumentos
     const instrumentosQuery = query(collection(db, ...dataBasePath, 'instrumentos'));
     const unsubscribeInstrumentos = onSnapshot(instrumentosQuery, (snapshot) => {
-      // (AJUSTADO) Ordenar alfabéticamente por instrumento
       const data = snapshotToArray(snapshot);
-      data.sort((a, b) => {
-          if (a.instrumento < b.instrumento) return -1;
-          if (a.instrumento > b.instrumento) return 1;
-          return 0;
-      });
+      data.sort((a, b) => (a.instrumento || "").localeCompare(b.instrumento || ""));
       setInstrumentos(data);
     }, (error) => {
       console.error("Error al cargar instrumentos:", error);
@@ -308,14 +323,7 @@ export default function App() {
     
     const unsubscribeMatriculaciones = onSnapshot(matriculationQuery, (snapshot) => {
         const data = snapshotToArray(snapshot);
-        // Ordenar alfabéticamente en el cliente
-        data.sort((a, b) => {
-            if (a.apellidos < b.apellidos) return -1;
-            if (a.apellidos > b.apellidos) return 1;
-            if (a.nombres < b.nombres) return -1;
-            if (a.nombres > b.nombres) return 1;
-            return 0;
-        });
+        data.sort((a, b) => (a.apellidos || "").localeCompare(b.apellidos || ""));
         setMatriculaciones(data);
     }, (error) => {
         console.error("Error al cargar matriculaciones:", error);
@@ -328,18 +336,19 @@ export default function App() {
         const data = snapshotToArray(snapshot);
          // (AJUSTADO) Ordenar por plan, luego por año, luego por materia
         data.sort((a, b) => {
-            // 1. Ordenar por Plan
-            if (a.plan < b.plan) return -1;
-            if (a.plan > b.plan) return 1;
-            
-            // 2. Ordenar por Año (numérico)
-            if (Number(a.anio) < Number(b.anio)) return -1;
-            if (Number(a.anio) > Number(b.anio)) return 1;
+            const planA = a.plan || "";
+            const planB = b.plan || "";
+            const anioA = Number(a.anio) || 0;
+            const anioB = Number(b.anio) || 0;
+            const matA = a.materia || "";
+            const matB = b.materia || "";
 
-            // 3. Ordenar por Materia (alfabético)
-            if (a.materia < b.materia) return -1;
-            if (a.materia > b.materia) return 1;
-
+            if (planA < planB) return -1;
+            if (planA > planB) return 1;
+            if (anioA < anioB) return -1;
+            if (anioA > anioB) return 1;
+            if (matA < matB) return -1;
+            if (matA > matB) return 1;
             return 0;
         });
         setMaterias(data);
@@ -348,7 +357,7 @@ export default function App() {
         showMessage(`Error al cargar materias: ${error.message}`, true);
     });
     
-    // (NUEVO) Listener para Notas
+    // Listener para Notas
     const notasQuery = query(collection(db, ...dataBasePath, 'notas'));
     const unsubscribeNotas = onSnapshot(notasQuery, (snapshot) => {
         const data = snapshotToArray(snapshot);
@@ -365,9 +374,10 @@ export default function App() {
       unsubscribeInstrumentos();
       unsubscribeMatriculaciones();
       unsubscribeMaterias();
-      unsubscribeNotas(); // (NUEVO)
+      unsubscribeNotas(); 
     };
-  }, [db, userId, appState, appId]); // Depende de appState
+  }, [db, userId, appId]); // (AJUSTADO) Ya no depende de appState
+
 
   // --- Funciones de Utilidad ---
   
@@ -376,7 +386,7 @@ export default function App() {
     setMessage({ text, isError });
   };
   
-  // --- (FIX) RESTAURAR CRUD Estudiantes ---
+  // --- CRUD Estudiantes ---
   
   // Camino base a la colección de estudiantes
   const getStudentsColRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -406,9 +416,7 @@ export default function App() {
   };
   
   const deleteStudent = async (id, nombre) => {
-    // ELIMINADO: const isConfirmed = window.prompt(`Escriba 'ELIMINAR' para borrar a ${nombre}.`) === 'ELIMINAR';
-    // if (!isConfirmed) return showMessage("Eliminación cancelada.", false);
-
+    // ELIMINADO: Confirmación
     try {
       await deleteDoc(getStudentDocRef(id));
       showMessage(`Estudiante ${nombre} eliminado.`, false);
@@ -420,10 +428,9 @@ export default function App() {
   // --- Fin CRUD Estudiantes ---
 
 
-  // (NUEVO) CRUD Materias (FIX: ELIMINAR CONFIRM)
+  // CRUD Materias
   const deleteMateria = async (id, nombre) => {
-      // ELIMINADO: if (!window.confirm(`¿Seguro que desea eliminar la materia ${nombre}?`)) return;
-      
+      // ELIMINADO: Confirmación
       try {
           const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'materias', id);
           await deleteDoc(docRef);
@@ -513,8 +520,8 @@ export default function App() {
   // Renderizado de la App (Router)
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Estilos de impresión globales */}
-      <style>{printStyles}</style>
+      {/* (AJUSTADO) Estilos de impresión globales */}
+      <style>{printStyles}{printStylesCertificate}</style>
       
       {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
       
@@ -526,10 +533,34 @@ export default function App() {
          </div>
       )}
 
+      {/* (NUEVO) Div de impresión para Certificado */}
+      <div id="certificate-print-area" className="print-area"></div>
+
       {/* Router de Pantallas */}
       <div className="no-print">
         {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}
-        {appState === 'student_access' && <StudentAccessScreen navigateTo={navigateTo} db={db} appId={appId} showMessage={showMessage} />}
+        {appState === 'student_access' && 
+            <StudentAccessScreen 
+                navigateTo={navigateTo} 
+                db={db} 
+                appId={appId} 
+                showMessage={showMessage}
+                // (AJUSTADO) Pasar listas de 'students' y 'matriculaciones'
+                students={students}
+                matriculaciones={matriculaciones}
+            />
+        }
+        {/* (NUEVO) Pantalla de Analítico de Estudiante */}
+        {appState === 'student_analitico' && 
+            <StudentAnaliticoScreen 
+                navigateTo={navigateTo}
+                showMessage={showMessage}
+                students={students}
+                matriculaciones={matriculaciones}
+                materias={materias}
+                notas={notas}
+            />
+        }
         {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
       </div>
       
@@ -550,8 +581,8 @@ export default function App() {
           deleteStudent={deleteStudent}
           matriculaciones={matriculaciones}
           materias={materias}
-          notas={notas} // (NUEVO)
-          deleteMateria={deleteMateria} // (NUEVO) Pasar la función
+          notas={notas} 
+          deleteMateria={deleteMateria} 
           notasSubTab={notasSubTab}
           setNotasSubTab={setNotasSubTab}
           snapshotToArray={snapshotToArray}
@@ -596,14 +627,18 @@ const LandingScreen = ({ navigateTo }) => (
 );
 
 /**
- * Pantalla 2: Acceso Estudiantes
+ * (REFACTORIZADO) Pantalla 2: Acceso Estudiantes
  */
-const StudentAccessScreen = ({ navigateTo, db, appId, showMessage }) => {
+const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, matriculaciones }) => {
+    const [step, setStep] = useState(1); // 1: DNI, 2: Plan Select, 3: Certificate
     const [dni, setDni] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [studentInfo, setStudentInfo] = useState(null); // { dni, nombres, apellidos, genero }
+    const [foundPlans, setFoundPlans] = useState([]); // [plan1, plan2]
+    const [selectedPlan, setSelectedPlan] = useState('');
     
-    // Función para buscar matrícula
-    const handleCertificateRequest = async (e) => {
+    // Función para buscar DNI (en lugar de 'handleCertificateRequest')
+    const handleDniSearch = async (e) => {
         e.preventDefault();
         if (!dni) return showMessage("Por favor, ingrese un DNI.", true);
         if (!db) return showMessage("Error: No hay conexión a la base de datos.", true);
@@ -612,33 +647,61 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage }) => {
         const currentYear = new Date().getFullYear().toString();
         
         try {
-            // Ruta a la colección de matriculación
-            const matriculationRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
-            
-            // Query
-            const q = query(
-                matriculationRef,
-                where("dni", "==", dni),
-                where("cicloLectivo", "==", currentYear)
+            // 1. Buscar Matriculaciones (usando la lista global)
+            const matriculasDelDNI = matriculaciones.filter(m => 
+                m.dni === dni && 
+                m.cicloLectivo === currentYear
             );
 
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                showMessage(`No se encontró matrícula activa para el DNI ${dni} en el ciclo ${currentYear}.`, true);
-            } else {
-                // Encontrado. (Lógica de PDF iría aquí)
-                const matricula = querySnapshot.docs[0].data();
-                showMessage(`Generando certificado para: ${matricula.nombres} ${matricula.apellidos} (Plan: ${matricula.plan})...`, false);
-                // TODO: Integrar librería de generación de PDF
+            if (matriculasDelDNI.length === 0) {
+                setIsLoading(false);
+                return showMessage(`No se encontró matrícula activa para el DNI ${dni} en el ciclo ${currentYear}.`, true);
             }
 
+            // 2. Buscar Info del Estudiante (usando la lista global)
+            const studentData = students.find(s => s.dni === dni);
+            
+            const firstMatricula = matriculasDelDNI[0];
+            
+            setStudentInfo({
+                dni: firstMatricula.dni,
+                nombres: firstMatricula.nombres,
+                apellidos: firstMatricula.apellidos,
+                genero: studentData ? studentData.genero : 'Otro' // Obtener género
+            });
+
+            // 3. Procesar planes
+            const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
+            
+            if (planesUnicos.length > 1) {
+                setFoundPlans(planesUnicos);
+                setStep(2); // Ir a selección de plan
+            } else {
+                setSelectedPlan(planesUnicos[0]);
+                setStep(3); // Ir directo al certificado
+            }
+            
         } catch (error) {
             console.error("Error buscando matrícula:", error);
-            showMessage(`Error al consultar la base de datos: ${error.message}`, true);
+            showMessage(`Error al consultar los datos: ${error.message}`, true);
         } finally {
             setIsLoading(false);
         }
+    };
+    
+    // (NUEVO) Manejar selección de plan
+    const handlePlanSelect = (plan) => {
+        setSelectedPlan(plan);
+        setStep(3);
+    };
+
+    // (NUEVO) Resetear el flujo
+    const resetFlow = () => {
+        setStep(1);
+        setDni('');
+        setStudentInfo(null);
+        setFoundPlans([]);
+        setSelectedPlan('');
     };
     
     return (
@@ -649,40 +712,74 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage }) => {
         </header>
 
         <main className="w-full max-w-lg p-8 bg-white rounded-xl shadow-lg border border-gray-200">
-            {/* 1. Certificado de Regularidad */}
-            <h2 className="text-2xl font-semibold text-gray-800 mb-5">Certificado de Alumno Regular</h2>
-            <form onSubmit={handleCertificateRequest} className="space-y-4">
+            
+            {/* Paso 1: Pedir DNI */}
+            {step === 1 && (
                 <div>
-                    <label htmlFor="dni_student" className="block text-sm font-medium text-gray-700">Ingrese su DNI (sin puntos)</label>
-                    <input 
-                        type="text" 
-                        id="dni_student"
-                        value={dni}
-                        onChange={(e) => setDni(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
-                        placeholder="Ej: 30123456"
-                        required
-                    />
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Certificado de Alumno Regular</h2>
+                    <form onSubmit={handleDniSearch} className="space-y-4">
+                        <div>
+                            <label htmlFor="dni_student" className="block text-sm font-medium text-gray-700">Ingrese su DNI (sin puntos)</label>
+                            <input 
+                                type="text" 
+                                id="dni_student"
+                                value={dni}
+                                onChange={(e) => setDni(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                placeholder="Ej: 30123456"
+                                required
+                            />
+                        </div>
+                        <button 
+                            type="submit" 
+                            disabled={isLoading}
+                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                        >
+                            {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
+                            {isLoading ? "Buscando..." : "Solicitar Certificado"}
+                        </button>
+                    </form>
                 </div>
-                <button 
-                    type="submit" 
-                    disabled={isLoading}
-                    className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
-                >
-                    {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
-                    {isLoading ? "Buscando..." : "Generar Certificado"}
-                </button>
-            </form>
+            )}
+            
+            {/* Paso 2: Seleccionar Plan */}
+            {step === 2 && studentInfo && (
+                <div>
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Múltiples Planes</h2>
+                    <p className="text-gray-600 mb-4">El/La estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado/a en múltiples planes este año. Por favor, seleccione uno:</p>
+                    <div className="space-y-3">
+                        {foundPlans.map(plan => (
+                            <button
+                                key={plan}
+                                onClick={() => handlePlanSelect(plan)}
+                                className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300 font-medium"
+                            >
+                                {plan}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={resetFlow} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver</button>
+                </div>
+            )}
+            
+            {/* Paso 3: Mostrar Certificado */}
+            {step === 3 && studentInfo && selectedPlan && (
+                <CertificateDisplay
+                    student={studentInfo}
+                    plan={selectedPlan}
+                    onCancel={resetFlow}
+                />
+            )}
 
-            {/* 2. Rendimiento Académico (Botón deshabilitado) */}
+            {/* 2. Rendimiento Académico (Botón (AHORA) habilitado) */}
             <div className="mt-8 border-t pt-6">
                  <h2 className="text-2xl font-semibold text-gray-800 mb-4">Rendimiento Académico</h2>
                  <button 
-                    disabled={true}
-                    className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg bg-gray-300 text-gray-500 cursor-not-allowed"
+                    onClick={() => navigateTo('student_analitico')}
+                    className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                     <IconReport className="w-5 h-5 mr-2" />
-                    Consultar Analítico (Próximamente)
+                    Consultar Analítico
                 </button>
             </div>
         </main>
@@ -696,6 +793,131 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage }) => {
       </div>
     );
 };
+
+/**
+ * (NUEVO) Componente de Certificado (Estudiante)
+ */
+const CertificateDisplay = ({ student, plan, onCancel }) => {
+            
+    const handlePrint = () => {
+        // Copiar el contenido de la vista previa al div de impresión
+        const printArea = document.getElementById('certificate-print-area');
+        const previewContent = document.getElementById('certificate-preview-content');
+        if (printArea && previewContent) {
+            printArea.innerHTML = previewContent.innerHTML;
+            window.print();
+            printArea.innerHTML = ''; // Limpiar
+        }
+    };
+    
+    // Determinar "alumno/a"
+    const alumnoTerm = (student.genero || 'Otro').toLowerCase() === 'femenino' ? 'alumna' : 'alumno';
+
+    return (
+        <div>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-5">Certificado Generado</h2>
+            
+            {/* Contenedor de VISTA PREVIA */}
+            <div id="certificate-preview-content" className="certificate-content" style={{ 
+                padding: '1.5rem', 
+                border: '1px dashed #ccc', 
+                fontFamily: "'Times New Roman', Times, serif", 
+                fontSize: '12pt',
+                lineHeight: 1.6,
+                background: 'white',
+                color: 'black'
+            }}>
+                <div className="certificate-header" style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14pt', marginBottom: '30px' }}>
+                    <p>Escuela Superior de Música de Neuquén</p>
+                </div>
+                <div className="certificate-body" style={{ marginTop: '30px', marginBottom: '40px' }}>
+                    <p>La Escuela Superior de Música de Neuquén certifica que
+                        el/la estudiante <strong>{student.nombres} {student.apellidos}</strong>,
+                        DNI <strong>{student.dni}</strong>, es {alumnoTerm} regular
+                        del plan <strong>{plan}</strong>.
+                    </p>
+                </div>
+                <div className="certificate-footer" style={{ marginBottom: '40px' }}>
+                     <p>Se extiende el presente certificado a los {new Date().toLocaleDateString('es-AR', { day: '2-digit' })} días del mes de {new Date().toLocaleDateString('es-AR', { month: 'long' })} de {new Date().getFullYear()}.</p>
+                </div>
+                <div className="certificate-signatures" style={{ 
+                    paddingTop: '50px', 
+                    display: 'flex', 
+                    justifyContent: 'space-around', 
+                    textAlign: 'center' 
+                }}>
+                    <div>
+                        <p className="certificate-signature-line" style={{ borderTop: '1px solid #000', width: '200px', paddingTop: '5px' }}>Firma</p>
+                    </div>
+                    <div>
+                        <p className="certificate-signature-line" style={{ borderTop: '1px solid #000', width: '200px', paddingTop: '5px' }}>Sello</p>
+                    </div>
+                </div>
+            </div>
+            
+            {/* Botones de Acción */}
+            <div className="mt-8 flex space-x-3">
+                <button 
+                    type="button" 
+                    onClick={onCancel}
+                    className="w-1/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-gray-200 hover:bg-gray-300 text-gray-700"
+                >
+                    &larr; Volver
+                </button>
+                <button 
+                    type="button" 
+                    onClick={handlePrint}
+                    className="w-2/3 flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                    <IconPrint />
+                    Imprimir / Descargar PDF
+                </button>
+            </div>
+        </div>
+    );
+};
+
+
+/**
+ * (NUEVO) Pantalla 2.5: Analítico del Estudiante
+ */
+const StudentAnaliticoScreen = ({ 
+    navigateTo, showMessage, students, matriculaciones, materias, notas 
+}) => {
+    return (
+        <div className="flex flex-col items-center min-h-screen p-8 bg-gray-100">
+            <header className="text-center mb-10">
+              <h1 className="text-4xl font-bold text-gray-800">Portal Estudiante</h1>
+              <p className="text-lg text-gray-600 mt-2">Consulta de Rendimiento Académico</p>
+            </header>
+    
+            <main className="w-full max-w-7xl p-8 bg-white rounded-xl shadow-lg border border-gray-200">
+                {/* Reutilizamos el componente AnaliticoTab de Admin */}
+                {/* Pasamos 'null' a props que no usamos aquí (db, appId, etc.) 
+                  ya que AnaliticoTab ahora solo depende de las listas (props).
+                */}
+                <AnaliticoTab
+                    db={null}
+                    appId={null}
+                    showMessage={showMessage}
+                    materias={materias}
+                    students={students} 
+                    matriculaciones={matriculaciones}
+                    notas={notas}
+                    snapshotToArray={null} // No se usa si no hay queries
+                />
+            </main>
+            
+            <button
+              onClick={() => navigateTo('student_access')}
+              className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
+            >
+              &larr; Volver al Portal Estudiante
+            </button>
+          </div>
+    );
+};
+
 
 /**
  * Pantalla 3: Login Administrativo
@@ -888,7 +1110,7 @@ const AdminDashboardScreen = ({
                 appId={appId}
                 showMessage={showMessage}
                 materias={materias}
-                deleteMateria={deleteMateria} // (NUEVO) Pasar la función
+                deleteMateria={deleteMateria} 
             />
           )}
       </main>
@@ -901,7 +1123,7 @@ const AdminDashboardScreen = ({
 // -----------------------------------------------------------------
 
 /**
- * (NUEVO) Pestaña 5: Analítico
+ * Pestaña 5: Analítico
  */
 const AnaliticoTab = ({ 
     db, appId, showMessage, materias, students, matriculaciones, notas, snapshotToArray 
@@ -914,7 +1136,7 @@ const AnaliticoTab = ({
     const [selectedPlan, setSelectedPlan] = useState(''); 
     const [studentInfo, setStudentInfo] = useState(null); // Info del alumno
     
-    // (AJUSTE) Estado para la URL del logo (ELIMINADO)
+    // (AJUSTE) Estado para la URL del Logo (ELIMINADO)
 
     // Paso 1: Buscar DNI en Matriculación
     const handleDniSearch = async (e) => {
@@ -2813,7 +3035,7 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
                             type="text" 
                             id="materia_anio"
                             value={anio}
-                            onChange={(e) => setAnio(e.target.value)}
+                            onChange={(e) => setAnio(e.g.target.value)}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
                             placeholder="Ej: 1"
                             required
@@ -2974,7 +3196,5 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         </form>
     );
 };
-
-
 
 
