@@ -37,6 +37,79 @@ const firebaseConfig = {
 };
 // --- Fin de la Configuración Manual ---
 
+// --- Estilos de Impresión (Para Analítico) ---
+// (AJUSTADO: Sin logo, alineación izquierda, con paginación)
+const printStyles = `
+  @media print {
+    body * {
+      visibility: hidden;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    #analitico-print-area, #analitico-print-area * {
+      visibility: visible;
+    }
+    #analitico-print-area {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      padding: 20mm 15mm; /* Márgenes de A4 */
+      font-size: 10pt;
+    }
+    .no-print {
+      display: none !important;
+    }
+    /* Estilos de tabla para impresión */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    th {
+      background-color: #eee !important;
+    }
+    /* Evitar saltos de página dentro de las filas */
+    tr {
+      page-break-inside: avoid;
+    }
+    /* Títulos de año */
+    h4 {
+      page-break-before: auto;
+      page-break-after: avoid;
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    /* (NUEVO) Clase para forzar salto de página */
+    .print-page-break {
+      page-break-before: always !important;
+    }
+    /* Encabezado del analítico (AJUSTADO) */
+    .print-header {
+      border-bottom: 2px solid #000;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+      text-align: left; /* Alineación izquierda */
+    }
+    /* Pie de página de firmas */
+    .print-signatures {
+      padding-top: 60px; /* Más espacio para firmas */
+      text-align: center;
+    }
+    .print-signature-line {
+      border-top: 1px solid #000;
+      padding-top: 4px;
+      margin: 0 30px; /* Margen para las líneas */
+    }
+  }
+`;
+
 
 // --- Componentes de Iconos (Mini SVGs) ---
 const IconUser = () => (
@@ -57,6 +130,10 @@ const IconLoading = () => (
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
   </svg>
 );
+const IconPrint = () => (
+  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a2 2 0 01-2-2v-2H9v2a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2h-2z" /></svg>
+);
+
 
 // --- Componente de Mensajes (Toast) ---
 const Message = ({ text, isError, onClose }) => {
@@ -66,7 +143,7 @@ const Message = ({ text, isError, onClose }) => {
   }, [onClose]);
 
   return (
-    <div className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-500' : 'bg-green-500'}`}>
+    <div className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-500' : 'bg-green-500'} no-print`}>
       {text}
     </div>
   );
@@ -116,6 +193,7 @@ export default function App() {
   const [instrumentos, setInstrumentos] = useState([]); // Para tabla Instrumentos
   const [matriculaciones, setMatriculaciones] = useState([]);
   const [materias, setMaterias] = useState([]); // Para tabla Materias
+  const [notas, setNotas] = useState([]); // (NUEVO) Para tabla Notas
   const [loading, setLoading] = useState(true);
   const [appState, setAppState] = useState('landing'); // 'landing', 'student_access', 'admin_login', 'admin_dashboard'
   const [activeTab, setActiveTab] = useState('inscribir'); // Pestaña inicial de admin
@@ -177,7 +255,7 @@ export default function App() {
   }, [firebaseConfig]);
 
 
-  // --- (FIX) Definición de snapshotToArray DENTRO de App ---
+  // --- Definición de snapshotToArray DENTRO de App ---
   // Convertir snapshot a Array (con ID)
   const snapshotToArray = (snapshot) => {
       const array = [];
@@ -210,18 +288,22 @@ export default function App() {
     // Listener para Instrumentos
     const instrumentosQuery = query(collection(db, ...dataBasePath, 'instrumentos'));
     const unsubscribeInstrumentos = onSnapshot(instrumentosQuery, (snapshot) => {
-      setInstrumentos(snapshotToArray(snapshot));
+      // (AJUSTADO) Ordenar alfabéticamente por instrumento
+      const data = snapshotToArray(snapshot);
+      data.sort((a, b) => {
+          if (a.instrumento < b.instrumento) return -1;
+          if (a.instrumento > b.instrumento) return 1;
+          return 0;
+      });
+      setInstrumentos(data);
     }, (error) => {
       console.error("Error al cargar instrumentos:", error);
       showMessage(`Error al cargar instrumentos: ${error.message}`, true);
     });
 
-    // Listener para Matriculaciones (para el listado en 'Matricular')
-    // (FIX) AHORA CARGA TODAS LAS MATRICULACIONES, no solo las del año en curso,
-    // para que la lógica de "Ingresar Nota" y "Planilla" funcione
+    // Listener para Matriculaciones (Carga TODAS las matriculaciones)
     const matriculationQuery = query(
         collection(db, ...dataBasePath, 'matriculation')
-        // where("cicloLectivo", "==", currentYear) // Eliminamos este filtro
     );
     
     const unsubscribeMatriculaciones = onSnapshot(matriculationQuery, (snapshot) => {
@@ -244,18 +326,36 @@ export default function App() {
     const materiasQuery = query(collection(db, ...dataBasePath, 'materias'));
     const unsubscribeMaterias = onSnapshot(materiasQuery, (snapshot) => {
         const data = snapshotToArray(snapshot);
-         // Ordenar por plan y luego por año
+         // (AJUSTADO) Ordenar por plan, luego por año, luego por materia
         data.sort((a, b) => {
+            // 1. Ordenar por Plan
             if (a.plan < b.plan) return -1;
             if (a.plan > b.plan) return 1;
-            if (a.anio < b.anio) return -1;
-            if (a.anio > b.anio) return 1;
+            
+            // 2. Ordenar por Año (numérico)
+            if (Number(a.anio) < Number(b.anio)) return -1;
+            if (Number(a.anio) > Number(b.anio)) return 1;
+
+            // 3. Ordenar por Materia (alfabético)
+            if (a.materia < b.materia) return -1;
+            if (a.materia > b.materia) return 1;
+
             return 0;
         });
         setMaterias(data);
     }, (error) => {
         console.error("Error al cargar materias:", error);
         showMessage(`Error al cargar materias: ${error.message}`, true);
+    });
+    
+    // (NUEVO) Listener para Notas
+    const notasQuery = query(collection(db, ...dataBasePath, 'notas'));
+    const unsubscribeNotas = onSnapshot(notasQuery, (snapshot) => {
+        const data = snapshotToArray(snapshot);
+        setNotas(data);
+    }, (error) => {
+        console.error("Error al cargar notas:", error);
+        showMessage(`Error al cargar notas: ${error.message}`, true);
     });
 
 
@@ -265,6 +365,7 @@ export default function App() {
       unsubscribeInstrumentos();
       unsubscribeMatriculaciones();
       unsubscribeMaterias();
+      unsubscribeNotas(); // (NUEVO)
     };
   }, [db, userId, appState, appId]); // Depende de appState
 
@@ -275,7 +376,7 @@ export default function App() {
     setMessage({ text, isError });
   };
   
-  // --- CRUD Estudiantes ---
+  // --- (FIX) RESTAURAR CRUD Estudiantes ---
   
   // Camino base a la colección de estudiantes
   const getStudentsColRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -300,23 +401,39 @@ export default function App() {
       showMessage("Datos del estudiante actualizados.", false);
     } catch (error) {
       console.error("Error al actualizar estudiante:", error);
-      showMessage(`Error: ${error.message}`, true);
+      showMessage(`Error al actualizar estudiante: ${error.message}`, true);
     }
   };
-
+  
   const deleteStudent = async (id, nombre) => {
-    // Usar prompt para confirmación (como se solicitó)
-    const isConfirmed = window.prompt(`Escriba 'ELIMINAR' para borrar a ${nombre}.`) === 'ELIMINAR';
-    if (!isConfirmed) return showMessage("Eliminación cancelada.", false);
+    // ELIMINADO: const isConfirmed = window.prompt(`Escriba 'ELIMINAR' para borrar a ${nombre}.`) === 'ELIMINAR';
+    // if (!isConfirmed) return showMessage("Eliminación cancelada.", false);
 
     try {
       await deleteDoc(getStudentDocRef(id));
       showMessage(`Estudiante ${nombre} eliminado.`, false);
     } catch (error) {
       console.error("Error al eliminar estudiante:", error);
-      showMessage(`Error: ${error.message}`, true);
+      showMessage(`Error al eliminar estudiante: ${error.message}`, true);
     }
   };
+  // --- Fin CRUD Estudiantes ---
+
+
+  // (NUEVO) CRUD Materias (FIX: ELIMINAR CONFIRM)
+  const deleteMateria = async (id, nombre) => {
+      // ELIMINADO: if (!window.confirm(`¿Seguro que desea eliminar la materia ${nombre}?`)) return;
+      
+      try {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'materias', id);
+          await deleteDoc(docRef);
+          showMessage("Materia eliminada.", false);
+      } catch (error) {
+          console.error("Error al eliminar materia:", error);
+          showMessage(`Error: ${error.message}`, true);
+      }
+  };
+
 
   // --- Navegación ---
   const navigateTo = (screen) => setAppState(screen);
@@ -332,7 +449,7 @@ export default function App() {
   
   if (loading && !debugInfo.projectId) {
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700 no-print">
             <IconLoading />
             <span className="text-xl ml-3">Cargando Configuración...</span>
         </div>
@@ -342,7 +459,7 @@ export default function App() {
   // Si hay un error de configuración manual
   if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "SU_API_KEY") {
       return (
-          <div className="flex items-center justify-center min-h-screen bg-red-100 p-8">
+          <div className="flex items-center justify-center min-h-screen bg-red-100 p-8 no-print">
               <div className="max-w-2xl bg-white p-10 rounded-lg shadow-xl border border-red-300 text-center">
                   <h1 className="text-3xl font-bold text-red-700 mb-4">Error de Configuración</h1>
                   <p className="text-lg text-gray-800">No se ha encontrado la configuración de Firebase.</p>
@@ -364,7 +481,7 @@ export default function App() {
   // Si hay un error de autenticación (Anónimo no habilitado)
   if (debugInfo.authStatus === "Error: Auth Anónimo deshabilitado.") {
       return (
-          <div className="flex items-center justify-center min-h-screen bg-yellow-100 p-8">
+          <div className="flex items-center justify-center min-h-screen bg-yellow-100 p-8 no-print">
               <div className="max-w-2xl bg-white p-10 rounded-lg shadow-xl border border-yellow-400 text-center">
                   <h1 className="text-3xl font-bold text-yellow-800 mb-4">Acción Requerida</h1>
                   <p className="text-lg text-gray-800">La conexión con <code>{debugInfo.projectId}</code> fue exitosa, pero se requiere un paso más.</p>
@@ -386,7 +503,7 @@ export default function App() {
   // Pantalla de carga principal
   if (loading) {
      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700 no-print">
             <IconLoading />
             <span className="text-xl ml-3">Conectando con {debugInfo.projectId}...</span>
         </div>
@@ -396,20 +513,27 @@ export default function App() {
   // Renderizado de la App (Router)
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Estilos de impresión globales */}
+      <style>{printStyles}</style>
+      
       {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
       
       {/* Caja de Debug (Desaparece si el ID es el de ejemplo) */}
       {debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
-         <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center">
+         <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
             <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
             <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
          </div>
       )}
 
       {/* Router de Pantallas */}
-      {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}
-      {appState === 'student_access' && <StudentAccessScreen navigateTo={navigateTo} db={db} appId={appId} showMessage={showMessage} />}
-      {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
+      <div className="no-print">
+        {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}
+        {appState === 'student_access' && <StudentAccessScreen navigateTo={navigateTo} db={db} appId={appId} showMessage={showMessage} />}
+        {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
+      </div>
+      
+      {/* El Dashboard se maneja fuera del 'no-print' principal para que el analítico pueda imprimirse */}
       {appState === 'admin_dashboard' && (
         <AdminDashboardScreen
           navigateTo={navigateTo}
@@ -426,6 +550,8 @@ export default function App() {
           deleteStudent={deleteStudent}
           matriculaciones={matriculaciones}
           materias={materias}
+          notas={notas} // (NUEVO)
+          deleteMateria={deleteMateria} // (NUEVO) Pasar la función
           notasSubTab={notasSubTab}
           setNotasSubTab={setNotasSubTab}
           snapshotToArray={snapshotToArray}
@@ -621,14 +747,17 @@ const AdminLoginScreen = ({ navigateTo, showMessage }) => {
  */
 const AdminDashboardScreen = ({ 
     navigateTo, activeTab, handleTabChange, showMessage,
-    db, userId, appId, students, instrumentos, matriculaciones, materias,
-    addStudent, updateStudent, deleteStudent,
+    db, userId, appId, students, instrumentos, matriculaciones, materias, notas, // (NUEVO) notas
+    addStudent, updateStudent, deleteStudent, deleteMateria, // (NUEVO) Recibir deleteMateria
     notasSubTab, setNotasSubTab,
-    snapshotToArray // (FIX) Recibir la función como prop
+    snapshotToArray 
 }) => {
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-md sticky top-0 z-10">
+      {/* (NUEVO) Contenedor de Impresión (vacío, solo para el analítico) */}
+      <div id="analitico-print-area" className="print-area"></div>
+
+      <header className="bg-white shadow-md sticky top-0 z-10 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
                 <div className="flex items-center">
@@ -644,7 +773,7 @@ const AdminDashboardScreen = ({
             </div>
         </div>
         
-        {/* Barra de Pestañas (Orden estable anterior) */}
+        {/* (REORDENADO) Barra de Pestañas */}
         <nav className="flex flex-wrap border-b border-gray-300 bg-white overflow-x-auto">
              <TabButton 
               id="inscribir" 
@@ -653,15 +782,15 @@ const AdminDashboardScreen = ({
               onClick={handleTabChange}
              />
              <TabButton 
-              id="matriculacion" 
-              label="2. Matricular" 
-              isActive={activeTab === 'matriculacion'} 
+              id="listado" 
+              label="2. Listado Estudiantes" 
+              isActive={activeTab === 'listado'} 
               onClick={handleTabChange}
              />
              <TabButton 
-              id="listado" 
-              label="3. Listado Estudiantes" 
-              isActive={activeTab === 'listado'} 
+              id="matriculacion" 
+              label="3. Matricular" 
+              isActive={activeTab === 'matriculacion'} 
               onClick={handleTabChange}
              />
              <TabButton 
@@ -671,23 +800,28 @@ const AdminDashboardScreen = ({
               onClick={handleTabChange}
              />
              <TabButton 
+              id="analitico" 
+              label="5. Analítico" 
+              isActive={activeTab === 'analitico'} 
+              onClick={handleTabChange}
+             />
+             <TabButton 
               id="instrumentos" 
-              label="5. Admin Instrumentos" 
+              label="6. Admin Instrumentos" 
               isActive={activeTab === 'instrumentos'} 
               onClick={handleTabChange}
              />
              <TabButton 
               id="materias" 
-              label="6. Admin Materias" 
+              label="7. Admin Materias" 
               isActive={activeTab === 'materias'} 
               onClick={handleTabChange}
              />
         </nav>
       </header>
       
-      {/* Contenido de Pestañas */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          {/* El componente Message ya se muestra globalmente en App() */}
+      {/* (REORDENADO) Contenido de Pestañas */}
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 no-print" id="main-content">
           
           {activeTab === 'inscribir' && (
             <InscribirEditarTab 
@@ -696,7 +830,13 @@ const AdminDashboardScreen = ({
                 showMessage={showMessage}
                 onStudentAdded={addStudent}
                 onStudentUpdated={updateStudent}
-                snapshotToArray={snapshotToArray} // (FIX) Pasar la prop
+                snapshotToArray={snapshotToArray}
+            />
+          )}
+          {activeTab === 'listado' && (
+            <ListadoEstudiantesTab 
+                students={students}
+                deleteStudent={deleteStudent}
             />
           )}
           {activeTab === 'matriculacion' && (
@@ -706,13 +846,7 @@ const AdminDashboardScreen = ({
                 showMessage={showMessage}
                 instrumentos={instrumentos}
                 matriculaciones={matriculaciones}
-                snapshotToArray={snapshotToArray} // (FIX) Pasar la prop
-            />
-          )}
-          {activeTab === 'listado' && (
-            <ListadoEstudiantesTab 
-                students={students}
-                deleteStudent={deleteStudent}
+                snapshotToArray={snapshotToArray}
             />
           )}
           {activeTab === 'notas' && (
@@ -722,10 +856,22 @@ const AdminDashboardScreen = ({
                 showMessage={showMessage}
                 materias={materias}
                 students={students} 
-                matriculaciones={matriculaciones} // (NUEVO) Pasar matriculaciones
+                matriculaciones={matriculaciones}
                 notasSubTab={notasSubTab}
                 setNotasSubTab={setNotasSubTab}
-                snapshotToArray={snapshotToArray} // (FIX) Pasar la prop
+                snapshotToArray={snapshotToArray}
+             />
+          )}
+          {activeTab === 'analitico' && (
+             <AnaliticoTab
+                db={db}
+                appId={appId}
+                showMessage={showMessage}
+                materias={materias}
+                students={students} 
+                matriculaciones={matriculaciones}
+                notas={notas}
+                snapshotToArray={snapshotToArray}
              />
           )}
           {activeTab === 'instrumentos' && (
@@ -742,6 +888,7 @@ const AdminDashboardScreen = ({
                 appId={appId}
                 showMessage={showMessage}
                 materias={materias}
+                deleteMateria={deleteMateria} // (NUEVO) Pasar la función
             />
           )}
       </main>
@@ -754,11 +901,401 @@ const AdminDashboardScreen = ({
 // -----------------------------------------------------------------
 
 /**
+ * (NUEVO) Pestaña 5: Analítico
+ */
+const AnaliticoTab = ({ 
+    db, appId, showMessage, materias, students, matriculaciones, notas, snapshotToArray 
+}) => {
+    const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Mostrar Reporte
+    const [dniSearch, setDniSearch] = useState('');
+    const [searchLoading, setSearchLoading] = useState(false);
+    
+    const [foundPlans, setFoundPlans] = useState([]); // Almacena los planes (strings)
+    const [selectedPlan, setSelectedPlan] = useState(''); 
+    const [studentInfo, setStudentInfo] = useState(null); // Info del alumno
+    
+    // (AJUSTE) Estado para la URL del logo (ELIMINADO)
+
+    // Paso 1: Buscar DNI en Matriculación
+    const handleDniSearch = async (e) => {
+        e.preventDefault();
+        if (!dniSearch) return showMessage("Ingrese un DNI.", true);
+        
+        setSearchLoading(true);
+        setFoundPlans([]);
+        setSelectedPlan('');
+        setStudentInfo(null);
+
+        try {
+            // Usar la lista 'matriculaciones' que ya tenemos
+            const matriculasDelDNI = matriculaciones.filter(m => m.dni === dniSearch);
+            // Buscar info del estudiante en la tabla 'students'
+            const studentData = students.find(s => s.dni === dniSearch);
+            
+            if (matriculasDelDNI.length === 0 || !studentData) {
+                showMessage(`DNI ${dniSearch} no encontrado o sin matriculaciones.`, true);
+                setStep(1);
+            } else {
+                const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
+                setStudentInfo(studentData); // Guardar info completa de 'students'
+
+                if (planesUnicos.length > 1) {
+                    setFoundPlans(planesUnicos);
+                    setStep(2);
+                } else {
+                    setSelectedPlan(planesUnicos[0]);
+                    setStep(3);
+                }
+                showMessage(`Estudiante ${studentData.nombres} ${studentData.apellidos} encontrado.`, false);
+            }
+        } catch (error) {
+            console.error("Error buscando DNI:", error);
+            showMessage(`Error de búsqueda: ${error.message}`, true);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    // Paso 2: Seleccionar Plan
+    const handlePlanSelect = (plan) => {
+        setSelectedPlan(plan);
+        setStep(3);
+    };
+
+    // Resetear
+    const resetForm = () => {
+        setStep(1);
+        setDniSearch('');
+        setSearchLoading(false);
+        setFoundPlans([]);
+        setSelectedPlan('');
+        setStudentInfo(null);
+    };
+
+    return (
+        <div id="gestion_analitico">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4">5. Generar Analítico</h2>
+
+            {/* (AJUSTE) Input de URL del Logo (ELIMINADO) */}
+
+            {/* Paso 1: Buscador de DNI */}
+            {step === 1 && (
+                <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200 max-w-lg mx-auto">
+                    <label htmlFor="dni_search_analitico" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
+                    <div className="mt-1 flex space-x-2">
+                        <input 
+                            type="text" 
+                            id="dni_search_analitico"
+                            value={dniSearch}
+                            onChange={(e) => setDniSearch(e.target.value)}
+                            className="flex-grow rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="Buscar DNI..."
+                            required
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={searchLoading}
+                            className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                        >
+                            {searchLoading ? <IconLoading /> : 'Buscar'}
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {/* Paso 2: Selector de Plan (si aplica) */}
+            {step === 2 && studentInfo && (
+                <div className="p-6 bg-white rounded-lg shadow-md border max-w-lg mx-auto">
+                    <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
+                    <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno para generar el analítico:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {foundPlans.map(plan => (
+                            <button
+                                key={plan}
+                                onClick={() => handlePlanSelect(plan)}
+                                className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300"
+                            >
+                                {plan}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={resetForm} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
+                </div>
+            )}
+            
+            {/* Paso 3: Mostrar Reporte */}
+            {step === 3 && studentInfo && selectedPlan && (
+                <AnaliticoReport 
+                    student={studentInfo}
+                    plan={selectedPlan}
+                    allNotas={notas}
+                    allMaterias={materias}
+                    onCancel={resetForm}
+                />
+            )}
+        </div>
+    );
+};
+
+/**
+ * Componente de Reporte Analítico (para impresión)
+ * (AJUSTADO SEGÚN REQUISITOS)
+ */
+const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => { 
+
+    // 1. (LÓGICA ACTUALIZADA) Procesamiento de notas
+    const processedData = useMemo(() => {
+        // 1. Get all subjects for the selected plan
+        const materiasDelPlan = allMaterias.filter(m => m.plan === plan);
+
+        // 2. Find notes for this student (approved only)
+        const notasAprobadas = allNotas.filter(n => 
+            n.dni === student.dni && 
+            n.plan === plan &&
+            ['Promoción', 'Examen', 'Equivalencia'].includes(n.condicion)
+        );
+
+        // 3. Map subjects and find their note
+        const materiasConNotas = materiasDelPlan.map(materia => {
+            // Find the note for this specific subject (materia.materia)
+            // (Lógica simplificada: buscar por nombre de materia)
+            const notaEncontrada = notasAprobadas.find(n => n.materia === materia.materia);
+
+            return {
+                ...materia, // id, materia (name), plan, anio
+                notaData: notaEncontrada || null // The full note object, or null
+            };
+        });
+
+        // 4. Group by year
+        const grouped = materiasConNotas.reduce((acc, materia) => {
+            const anio = materia.anio;
+            if (!acc[anio]) {
+                acc[anio] = [];
+            }
+            acc[anio].push(materia);
+            return acc;
+        }, {});
+        
+        // 5. Sort subjects within each year
+        Object.keys(grouped).forEach(anio => {
+           grouped[anio].sort((a,b) => a.materia.localeCompare(b.materia));
+        });
+
+        return grouped;
+    }, [student.dni, plan, allNotas, allMaterias]);
+    
+    // (FIX) Ordenar los años numéricamente
+    const anios = Object.keys(processedData).sort((a, b) => {
+        if (a === 'N/A') return 1;
+        if (b === 'N/A') return -1;
+        // Ordenar numéricamente (1, 2, 3, 4, 5)
+        return a.localeCompare(b, undefined, { numeric: true });
+    });
+    
+    // (NUEVO) Dividir años para paginación
+    const aniosPagina1 = anios.filter(a => ['1', '2', '3'].includes(a));
+    const aniosPagina2 = anios.filter(a => !['1', '2', '3'].includes(a)); // 4, 5, N/A
+
+    // 2. Función de Impresión
+    const handlePrint = () => {
+        // Copiar el contenido de la vista previa al div de impresión
+        const printArea = document.getElementById('analitico-print-area');
+        const previewContent = document.getElementById('analitico-preview-content');
+        if (printArea && previewContent) {
+            printArea.innerHTML = previewContent.innerHTML;
+            window.print();
+        } else {
+            alert("Error al preparar la impresión.");
+        }
+    };
+    
+    // Helper para formatear fecha
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            // Ajustar por zona horaria (si viene como YYYY-MM-DD)
+            const utcDate = new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+            return utcDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        } catch (e) {
+            return dateString;
+        }
+    };
+    
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-lg border">
+            {/* Contenedor de VISTA PREVIA. */}
+            <div id="analitico-preview-content" className="max-w-4xl mx-auto bg-white text-black">
+                
+                {/* 1. Encabezado (AJUSTADO) */}
+                <div className="print-header text-left text-sm">
+                    {/* (AJUSTE) Sin Logo */}
+                    
+                    {/* (AJUSTE) Texto del Encabezado (Alineado Izquierda) */}
+                    <div>
+                        <h2 className="text-xl font-bold">Escuela Superior de Música de Neuquén</h2>
+                        <h3 className="text-lg font-semibold">Formación Básica en Música (FOBAM)</h3>
+                        <h3 className="text-lg font-semibold mt-2">CERTIFICADO DE RENDIMIENTO ACADÉMICO (ANALÍTICO)</h3>
+                        <p className="mt-2">Plan de Estudio: <strong>{plan}</strong></p>
+                    </div>
+                </div>
+                
+                {/* 2. Datos del Estudiante (AJUSTADO) */}
+                <div className="my-6 text-sm">
+                    <h3 className="text-base font-bold mb-3 border-b border-gray-400">DATOS DEL/DE LA ESTUDIANTE</h3>
+                    {/* Renglón 1 (AJUSTADO) */}
+                    <div className="flex justify-between items-center">
+                        <p><strong>Apellidos:</strong> {student.apellidos}</p>
+                        <p><strong>Nombres:</strong> {student.nombres}</p>
+                        <p><strong>DNI:</strong> {student.dni}</p>
+                    </div>
+                    {/* Renglón 2 (AJUSTADO) */}
+                    <div className="flex justify-between items-center mt-1">
+                        <p><strong>Fecha de Nacimiento:</strong> {formatDate(student.fechanacimiento)}</p>
+                        <p><strong>Nacionalidad:</strong> {student.nacionalidad}</p>
+                        <p></p> {/* Espaciador para alinear */}
+                    </div>
+                </div>
+
+                {/* 3. Espacios Acreditados (Materias) (LÓGICA DE PAGINACIÓN AJUSTADA) */}
+                <div className="my-6">
+                    <h3 className="text-base font-bold mb-2 border-b border-gray-400">ESPACIOS CURRICULARES ACREDITADOS</h3>
+                    
+                    {/* --- PÁGINA 1 (Años 1-3) --- */}
+                    {aniosPagina1.map(anio => {
+                        const materiasDelAnio = processedData[anio] || [];
+                        if (materiasDelAnio.length > 0) {
+                            return (
+                                <div key={anio} className="mb-4">
+                                    <h4 className="text-sm font-bold bg-gray-100 p-2 border border-gray-300">AÑO DE CURSADO: {anio}</h4>
+                                    <table className="w-full text-xs border-l border-r border-gray-300">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="p-2 text-left font-semibold border-b border-gray-300">Espacio Curricular (Materia)</th>
+                                                <th className="p-2 text-left font-semibold border-b border-gray-300">Condición</th>
+                                                <th className="p-2 text-left font-semibold border-b border-gray-300">Calificación</th>
+                                                <th className="p-2 text-left font-semibold border-b border-gray-300">Fecha</th>
+                                                <th className="p-2 text-left font-semibold border-b border-gray-300">Libro/Folio</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {materiasDelAnio.map(materia => (
+                                                <tr key={materia.id} className="border-b border-gray-200">
+                                                    {/* Materia Name */}
+                                                    <td className="p-2">
+                                                        {materia.materia}
+                                                        {materia.notaData && materia.notaData.obs_optativa_ensamble && (
+                                                            <span className="text-gray-600 italic"> ({materia.notaData.obs_optativa_ensamble})</span>
+                                                        )}
+                                                    </td>
+                                                    {/* Datos de la nota (o vacío si no existe) */}
+                                                    <td className="p-2">{materia.notaData ? materia.notaData.condicion : ''}</td>
+                                                    <td className="p-2">{materia.notaData ? materia.notaData.nota : ''}</td>
+                                                    <td className="p-2">{materia.notaData ? formatDate(materia.notaData.fecha) : ''}</td>
+                                                    <td className="p-2">{materia.notaData ? materia.notaData.libro_folio : ''}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })}
+                    
+                    {/* --- PÁGINA 2 (Años 4, 5, etc. + Footer) --- */}
+                    {/* (NUEVO) Este div fuerza el salto de página en impresión */}
+                    <div className="print-page-break">
+                        {aniosPagina2.map(anio => {
+                            const materiasDelAnio = processedData[anio] || [];
+                            if (materiasDelAnio.length > 0) {
+                                return (
+                                    <div key={anio} className="mb-4">
+                                        <h4 className="text-sm font-bold bg-gray-100 p-2 border border-gray-300">AÑO DE CURSADO: {anio}</h4>
+                                        <table className="w-full text-xs border-l border-r border-gray-300">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="p-2 text-left font-semibold border-b border-gray-300">Espacio Curricular (Materia)</th>
+                                                    <th className="p-2 text-left font-semibold border-b border-gray-300">Condición</th>
+                                                    <th className="p-2 text-left font-semibold border-b border-gray-300">Calificación</th>
+                                                    <th className="p-2 text-left font-semibold border-b border-gray-300">Fecha</th>
+                                                    <th className="p-2 text-left font-semibold border-b border-gray-300">Libro/Folio</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {materiasDelAnio.map(materia => (
+                                                    <tr key={materia.id} className="border-b border-gray-200">
+                                                        <td className="p-2">{materia.materia}</td>
+                                                        <td className="p-2">{materia.notaData ? materia.notaData.condicion : ''}</td>
+                                                        <td className="p-2">{materia.notaData ? materia.notaData.nota : ''}</td>
+                                                        <td className="p-2">{materia.notaData ? formatDate(materia.notaData.fecha) : ''}</td>
+                                                        <td className="p-2">{materia.notaData ? materia.notaData.libro_folio : ''}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })}
+
+                        {/* (AJUSTE) Mensaje de "sin materias" solo si ambas listas están vacías */}
+                        {aniosPagina1.length === 0 && aniosPagina2.length === 0 && (
+                            <p className="text-center italic text-gray-500 py-4">No se encontraron materias cargadas en la tabla 'Materias' para el plan seleccionado.</p>
+                        )}
+                        
+                        {/* (AJUSTE) Pie de página movido a la Página 2 */}
+                        <div className="mt-8 text-sm">
+                            <p>Emitido en Neuquén Capital el {new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}.</p>
+                        </div>
+
+                        {/* (AJUSTE) Firmas movidas a la Página 2 y líneas restauradas */}
+                        <div className="print-signatures grid grid-cols-2 gap-8 text-sm">
+                            <div>
+                                <p className="print-signature-line"></p>
+                            </div>
+                            <div>
+                                <p className="print-signature-line"></p>
+                            </div>
+                        </div>
+                        
+                    </div> {/* Fin de .print-page-break */}
+
+                </div>
+
+            </div> {/* Fin de #analitico-preview-content */}
+
+            {/* Botones de Acción (Fuera del área de impresión) */}
+            <div className="mt-8 flex space-x-3 no-print">
+                <button 
+                    type="button" 
+                    onClick={onCancel}
+                    className="w-1/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-gray-200 hover:bg-gray-300 text-gray-700"
+                >
+                    &larr; Volver a buscar
+                </button>
+                <button 
+                    type="button" 
+                    onClick={handlePrint}
+                    className="w-2/3 flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                    <IconPrint />
+                    Imprimir / Descargar PDF
+                </button>
+            </div>
+        </div>
+    );
+};
+
+
+/**
  * Pestaña 4: Gestión de Notas (Contenedor Principal)
  */
 const NotasTab = ({ 
     db, appId, showMessage, materias, students, matriculaciones,
-    notasSubTab, setNotasSubTab, snapshotToArray // (FIX) Recibir prop
+    notasSubTab, setNotasSubTab, snapshotToArray 
 }) => {
   return (
     <div id="gestion_notas">
@@ -793,8 +1330,8 @@ const NotasTab = ({
             appId={appId}
             showMessage={showMessage}
             materias={materias}
-            matriculaciones={matriculaciones} // (NUEVO) Pasar matriculaciones
-            snapshotToArray={snapshotToArray} // (FIX) Pasar la prop
+            matriculaciones={matriculaciones} 
+            snapshotToArray={snapshotToArray} 
         />
       )}
       {notasSubTab === 'ingresar_planilla' && (
@@ -804,7 +1341,7 @@ const NotasTab = ({
             showMessage={showMessage}
             materias={materias}
             students={students}
-            matriculaciones={matriculaciones} // (NUEVO) Pasar matriculaciones
+            matriculaciones={matriculaciones} 
         />
       )}
       {notasSubTab === 'ingresar_analitico' && (
@@ -821,13 +1358,13 @@ const NotasTab = ({
  * Sub-Pestaña 4.1: Ingresar Nota Individual
  */
 const IngresarNotaIndividual = ({ 
-    db, appId, showMessage, materias, matriculaciones, snapshotToArray // (FIX) Recibir prop
+    db, appId, showMessage, materias, matriculaciones, snapshotToArray 
 }) => {
     const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Cargar Nota
     const [dniSearch, setDniSearch] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
     
-    const [foundMatriculas, setFoundMatriculas] = useState([]); // Almacena los planes (strings)
+    const [foundPlans, setFoundPlans] = useState([]); // Almacena los planes (strings)
     const [selectedPlan, setSelectedPlan] = useState(''); // El plan (ej: '530 Arpa')
     const [studentInfo, setStudentInfo] = useState({ dni: '', nombres: '', apellidos: '' }); // Info del alumno
     
@@ -855,7 +1392,7 @@ const IngresarNotaIndividual = ({
         if (!dniSearch) return showMessage("Ingrese un DNI.", true);
         
         setSearchLoading(true);
-        setFoundMatriculas([]);
+        setFoundPlans([]);
         setSelectedPlan('');
         setStudentInfo({ dni: '', nombres: '', apellidos: '' });
 
@@ -879,7 +1416,7 @@ const IngresarNotaIndividual = ({
 
                 if (planesUnicos.length > 1) {
                     // Múltiples planes -> Ir al Paso 2
-                    setFoundMatriculas(planesUnicos);
+                    setFoundPlans(planesUnicos);
                     setStep(2);
                 } else {
                     // Un solo plan -> Saltar al Paso 3
@@ -887,7 +1424,8 @@ const IngresarNotaIndividual = ({
                     setSelectedPlan(plan);
                     setStep(3);
                 }
-                showMessage(`Estudiante ${studentInfo.nombres} ${studentInfo.apellidos} encontrado.`, false);
+                // (FIX) Usar los datos recién seteados
+                showMessage(`Estudiante ${matriculasDelDNI[0].nombres} ${matriculasDelDNI[0].apellidos} encontrado.`, false);
             }
         } catch (error) {
             console.error("Error buscando DNI en matriculación:", error);
@@ -916,6 +1454,13 @@ const IngresarNotaIndividual = ({
         
         if (materiaId) {
             const materiaSeleccionada = materias.find(m => m.id === materiaId);
+            if (!materiaSeleccionada) {
+                 // Fallback por si la materia no está
+                setShowObsField(false);
+                setNotaForm(prev => ({ ...prev, materia: 'Error - Materia no encontrada', obs_optativa_ensamble: '' }));
+                return;
+            }
+            
             const materiaNombre = materiaSeleccionada.materia.toLowerCase();
             
             // Actualizar el nombre de la materia en el formulario
@@ -983,7 +1528,7 @@ const IngresarNotaIndividual = ({
         setStep(1);
         setDniSearch('');
         setSearchLoading(false);
-        setFoundMatriculas([]);
+        setFoundPlans([]);
         setSelectedPlan('');
         setStudentInfo({ dni: '', nombres: '', apellidos: '' });
         setSelectedMateriaId('');
@@ -1027,12 +1572,12 @@ const IngresarNotaIndividual = ({
             )}
 
             {/* Paso 2: Selector de Plan (si aplica) */}
-            {step === 2 && (
+            {step === 2 && studentInfo && (
                 <div className="p-6 bg-white rounded-lg shadow-md border">
                     <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
                     <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno para cargar la nota:</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {foundMatriculas.map(plan => (
+                        {foundPlans.map(plan => (
                             <button
                                 key={plan}
                                 onClick={() => handlePlanSelect(plan)}
@@ -1047,7 +1592,7 @@ const IngresarNotaIndividual = ({
             )}
 
             {/* Paso 3: Formulario de Carga de Nota */}
-            {step === 3 && (
+            {step === 3 && studentInfo && (
                 <form onSubmit={handleSaveNota} className="p-6 bg-white rounded-lg shadow-md border space-y-4">
                     <div className="flex justify-between items-start">
                         <div>
@@ -1196,8 +1741,7 @@ const IngresarNotaIndividual = ({
 };
 
 /**
- * (NUEVO) Sub-Pestaña 4.2: Ingresar Planilla
- * (Actualizado con la nueva lógica)
+ * Sub-Pestaña 4.2: Ingresar Planilla
  */
 const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matriculaciones }) => {
     
@@ -1210,11 +1754,6 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
     // (FIX 1) Opciones para el desplegable de DNI (desde matriculaciones)
     const studentOptions = useMemo(() => {
         const uniqueStudents = new Map();
-        
-        // (FIX) Usar 'matriculaciones' (TODAS) en lugar de filtrar por año actual.
-        // Esto asegura que podamos cargar notas para alumnos de años anteriores
-        // o que no se matricularon este año pero rindieron examen.
-        // const matriculacionesActuales = matriculaciones.filter(m => m.cicloLectivo === new Date().getFullYear().toString());
         
         matriculaciones.forEach(m => {
             if (!uniqueStudents.has(m.dni)) {
@@ -1325,11 +1864,11 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
         try {
             for (const row of planillaRows) {
                 if (!row.dni || !row.nota) {
-                    throw new Error(`La fila ${row.id + 1} (DNI: ${row.dni}) está incompleta (falta DNI o Nota).`);
+                    // Omitir filas vacías en lugar de lanzar error
+                    continue; 
                 }
 
-                // (NUEVO) Lógica de Plan
-                // 1. Encontrar todos los planes para este DNI en matriculaciones (de CUALQUIER año)
+                // 1. Encontrar todos los planes para este DNI en matriculaciones
                 const planesDelEstudiante = [...new Set(
                     matriculaciones
                         .filter(m => m.dni === row.dni)
@@ -1379,15 +1918,16 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
             
             if (notasGuardadas > 0) {
                 showMessage(`Planilla procesada. ${notasGuardadas} notas guardadas exitosamente.`, false);
+                // (FIX) Usar showMessage para advertencias en lugar de alert
                 if (advertencias.length > 0) {
-                    // Mostrar advertencias si las hubo
-                    setTimeout(() => alert("Advertencias:\n" + advertencias.join("\n")), 100);
+                    setTimeout(() => showMessage(`ADVERTENCIAS: ${advertencias.join('; ')}`, true), 100);
                 }
                 resetForm();
             } else if (planillaRows.length > 0) {
-                // No se guardó nada, pero no hubo un error
-                showMessage("Se procesó la planilla, pero no se guardó ninguna nota (la materia podría no existir en los planes de los alumnos).", true);
-                alert("Advertencias:\n" + advertencias.join("\n"));
+                showMessage("Se procesó la planilla, pero no se guardó ninguna nota.", true);
+                if (advertencias.length > 0) {
+                   setTimeout(() => showMessage(`ERRORES: ${advertencias.join('; ')}`, true), 100);
+                }
             } else {
                 showMessage("No había filas para procesar.", false);
             }
@@ -1552,7 +2092,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-100">
                                     <tr>
-                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">DNI (Matriculados Año Actual)</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">DNI (Matriculados)</th>
                                         <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Apellidos</th>
                                         <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Nombres</th>
                                         <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Calificación *</th>
@@ -1567,7 +2107,6 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                                                     value={row.dni}
                                                     onChange={(e) => handleRowChange(index, 'dni', e.target.value)}
                                                     className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
-                                                    required
                                                 >
                                                     <option value="">Seleccione DNI...</option>
                                                     {studentOptions.map(s => (
@@ -1601,7 +2140,6 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                                                     onChange={(e) => handleRowChange(index, 'nota', e.target.value)}
                                                     className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
                                                     placeholder="Ej: 9"
-                                                    required
                                                 />
                                             </td>
                                         </tr>
@@ -1617,7 +2155,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                                 disabled={loading}
                                 className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                             >
-                                {loading ? <IconLoading /> : `Guardar Planilla (${planillaRows.length} Notas)`}
+                                {loading ? <IconLoading /> : `Guardar Planilla`}
                             </button>
                         </div>
                     </div>
@@ -2091,7 +2629,7 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
     };
     
     const deleteInstrumento = async (id, nombre) => {
-        if (!window.confirm(`¿Seguro que desea eliminar ${nombre}?`)) return;
+        // ELIMINADO: if (!window.confirm(`¿Seguro que desea eliminar ${nombre}?`)) return;
         
         try {
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'instrumentos', id);
@@ -2187,7 +2725,7 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
 /**
  * Pestaña 6: Admin Materias
  */
-const MateriasTab = ({ db, appId, showMessage, materias }) => {
+const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { // (NUEVO) Recibir deleteMateria
     const [materia, setMateria] = useState('');
     const [plan, setPlan] = useState('');
     const [anio, setAnio] = useState('');
@@ -2221,6 +2759,8 @@ const MateriasTab = ({ db, appId, showMessage, materias }) => {
         }
     };
     
+    // (FIX) Esta función AHORA se recibe por props.
+    /*
     const deleteMateria = async (id, nombre) => {
         if (!window.confirm(`¿Seguro que desea eliminar ${nombre}?`)) return;
         
@@ -2233,6 +2773,7 @@ const MateriasTab = ({ db, appId, showMessage, materias }) => {
             showMessage(`Error: ${error.message}`, true);
         }
     };
+    */
 
     return (
         <div id="admin_materias">
@@ -2433,5 +2974,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         </form>
     );
 };
+
+
 
 
