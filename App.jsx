@@ -42,7 +42,7 @@ const printStyles = `
   @media print {
     body * {
       visibility: hidden;
-      -webkit-print-color-adjust: exact !important;
+      -webkit-print-color-adjust: exact !importanT;
       print-color-adjust: exact !important;
     }
     #analitico-print-area, #analitico-print-area * {
@@ -184,13 +184,14 @@ const AccessButton = ({ icon, title, description, onClick }) => (
 );
 
 // --- Componente Botón de Pestaña (Admin) ---
+// (ESTILO ACTUALIZADO)
 const TabButton = ({ id, label, isActive, onClick }) => (
   <button
     onClick={() => onClick(id)}
-    className={`px-3 py-3 md:px-4 md:py-3 text-sm md:text-base font-medium transition duration-150 ${
+    className={`px-3 py-2 md:px-4 md:py-2 text-sm md:text-base font-medium rounded-md transition duration-200 mx-1 mb-1 ${
       isActive
-        ? 'border-b-4 border-indigo-500 text-indigo-600'
-        : 'border-b-4 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        ? 'bg-indigo-600 text-white shadow-sm'
+        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
     }`}
   >
     {label}
@@ -253,11 +254,11 @@ export default function App() {
           signInAnonymously(userAuth).catch((error) => {
             console.error("Error en signInAnonymously:", error);
             if (error.code === 'auth/configuration-not-found') {
-                 setMessage({ text: "Error: 'Inicio de sesión Anónimo' no está habilitado en Firebase.", isError: true });
-                 setDebugInfo(prev => ({ ...prev, authStatus: "Error: Auth Anónimo deshabilitado." }));
+                setMessage({ text: "Error: 'Inicio de sesión Anónimo' no está habilitado en Firebase.", isError: true });
+                setDebugInfo(prev => ({ ...prev, authStatus: "Error: Auth Anónimo deshabilitado." }));
             } else {
                 setMessage({ text: `Error de autenticación: ${error.message}`, isError: true });
-                 setDebugInfo(prev => ({ ...prev, authStatus: `Error: ${error.code}` }));
+                setDebugInfo(prev => ({ ...prev, authStatus: `Error: ${error.code}` }));
             }
           });
         }
@@ -528,8 +529,8 @@ export default function App() {
       {/* Caja de Debug (Desaparece si el ID es el de ejemplo) */}
       {debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
          <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
-            <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
-            <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
+           <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
+           <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
          </div>
       )}
 
@@ -598,11 +599,12 @@ export default function App() {
 
 /**
  * Pantalla 1: Bienvenida (Landing)
+ * (ESTILO ACTUALIZADO)
  */
 const LandingScreen = ({ navigateTo }) => (
-  <div className="flex flex-col items-center justify-center min-h-screen p-8" style={{ background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
+  <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-100">
     <header className="text-center mb-12">
-      <h1 className="text-5xl font-bold text-gray-800">Sistema de Gestión Estudiantil</h1>
+      <h1 className="text-5xl font-bold text-gray-800 tracking-tight">Sistema de Gestión Estudiantil</h1>
       <h2 className="text-3xl font-semibold text-indigo-600 mt-2">FOBAM</h2>
       <p className="text-xl text-gray-600 mt-4">Escuela Superior de Música de Neuquén</p>
     </header>
@@ -625,6 +627,7 @@ const LandingScreen = ({ navigateTo }) => (
     </footer>
   </div>
 );
+
 
 /**
  * (REFACTORIZADO) Pantalla 2: Acceso Estudiantes
@@ -894,7 +897,7 @@ const StudentAnaliticoScreen = ({
             <main className="w-full max-w-7xl p-8 bg-white rounded-xl shadow-lg border border-gray-200">
                 {/* Reutilizamos el componente AnaliticoTab de Admin */}
                 {/* Pasamos 'null' a props que no usamos aquí (db, appId, etc.) 
-                  ya que AnaliticoTab ahora solo depende de las listas (props).
+                 ya que AnaliticoTab ahora solo depende de las listas (props).
                 */}
                 <AnaliticoTab
                     db={null}
@@ -995,49 +998,49 @@ const AdminDashboardScreen = ({
             </div>
         </div>
         
-        {/* (REORDENADO) Barra de Pestañas */}
-        <nav className="flex flex-wrap border-b border-gray-300 bg-white overflow-x-auto">
+        {/* (REORDENADO Y ESTILO ACTUALIZADO) Barra de Pestañas */}
+        <nav className="flex flex-wrap border-b border-gray-200 bg-gray-50 p-2 overflow-x-auto">
              <TabButton 
-              id="inscribir" 
-              label="1. Inscribir/Editar" 
-              isActive={activeTab === 'inscribir'} 
-              onClick={handleTabChange}
+               id="inscribir" 
+               label="1. Inscribir/Editar" 
+               isActive={activeTab === 'inscribir'} 
+               onClick={handleTabChange}
              />
              <TabButton 
-              id="listado" 
-              label="2. Listado Estudiantes" 
-              isActive={activeTab === 'listado'} 
-              onClick={handleTabChange}
+               id="listado" 
+               label="2. Listado Estudiantes" 
+               isActive={activeTab === 'listado'} 
+               onClick={handleTabChange}
              />
              <TabButton 
-              id="matriculacion" 
-              label="3. Matricular" 
-              isActive={activeTab === 'matriculacion'} 
-              onClick={handleTabChange}
+               id="matriculacion" 
+               label="3. Matricular" 
+               isActive={activeTab === 'matriculacion'} 
+               onClick={handleTabChange}
              />
              <TabButton 
-              id="notas" 
-              label="4. Gestión de Notas" 
-              isActive={activeTab === 'notas'} 
-              onClick={handleTabChange}
+               id="notas" 
+               label="4. Gestión de Notas" 
+               isActive={activeTab === 'notas'} 
+               onClick={handleTabChange}
              />
              <TabButton 
-              id="analitico" 
-              label="5. Analítico" 
-              isActive={activeTab === 'analitico'} 
-              onClick={handleTabChange}
+               id="analitico" 
+               label="5. Analítico" 
+               isActive={activeTab === 'analitico'} 
+               onClick={handleTabChange}
              />
              <TabButton 
-              id="instrumentos" 
-              label="6. Admin Instrumentos" 
-              isActive={activeTab === 'instrumentos'} 
-              onClick={handleTabChange}
+               id="instrumentos" 
+               label="6. Admin Instrumentos" 
+               isActive={activeTab === 'instrumentos'} 
+               onClick={handleTabChange}
              />
              <TabButton 
-              id="materias" 
-              label="7. Admin Materias" 
-              isActive={activeTab === 'materias'} 
-              onClick={handleTabChange}
+               id="materias" 
+               label="7. Admin Materias" 
+               isActive={activeTab === 'materias'} 
+               onClick={handleTabChange}
              />
         </nav>
       </header>
@@ -3035,7 +3038,7 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
                             type="text" 
                             id="materia_anio"
                             value={anio}
-                            onChange={(e) => setAnio(e.g.target.value)}
+                            onChange={(e) => setAnio(e.target.value)}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
                             placeholder="Ej: 1"
                             required
@@ -3153,7 +3156,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
                                 value={formData[field.name]}
                                 onChange={handleChange}
                                 required={field.required}
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
                             >
                                 {field.options.map(option => (
                                     <option key={option} value={option}>{option}</option>
@@ -3168,7 +3171,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
                                 onChange={handleChange}
                                 required={field.required}
                                 disabled={field.disabled || formLoading}
-                                className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border ${field.disabled ? 'bg-gray-100' : ''}`}
+                                className={`mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150 ${field.disabled ? 'bg-gray-100' : ''}`}
                             />
                         )}
                     </div>
@@ -3181,14 +3184,14 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
                     type="button" 
                     onClick={onCancel}
                     disabled={formLoading}
-                    className="w-1/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    className="w-1/3 font-semibold py-3 px-4 rounded-lg shadow-sm transition duration-200 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300"
                 >
                     Cancelar
                 </button>
                 <button 
                     type="submit" 
                     disabled={formLoading}
-                    className={`w-2/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 text-white ${isEdit ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} ${formLoading ? 'bg-gray-400' : ''}`}
+                    className={`w-2/3 font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 text-white ${isEdit ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'} ${formLoading ? 'bg-gray-400' : ''}`}
                 >
                     {formLoading ? <IconLoading /> : buttonLabel}
                 </button>
@@ -3196,5 +3199,4 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         </form>
     );
 };
-
 
