@@ -1082,6 +1082,7 @@ const AdminDashboardScreen = ({
                 materias={materias}
                 students={students} 
                 matriculaciones={matriculaciones}
+                notas={notas}
                 notasSubTab={notasSubTab}
                 setNotasSubTab={setNotasSubTab}
                 snapshotToArray={snapshotToArray}
@@ -1519,8 +1520,8 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
  * Pestaña 4: Gestión de Notas (Contenedor Principal)
  */
 const NotasTab = ({ 
-    db, appId, showMessage, materias, students, matriculaciones,
-    notasSubTab, setNotasSubTab, snapshotToArray 
+    db, appId, showMessage, materias, students, matriculaciones, notas, 
+    notasSubTab, setNotasSubTab, snapshotToArray
 }) => {
   return (
     <div id="gestion_notas">
@@ -1570,10 +1571,15 @@ const NotasTab = ({
         />
       )}
       {notasSubTab === 'ingresar_analitico' && (
-        <div className="p-8 bg-purple-50 border border-purple-300 rounded-lg text-center">
-            <h3 className="text-xl font-semibold">Ingresar Analítico</h3>
-            <p className="mt-2 text-gray-600">Este módulo permitirá cargar notas por equivalencia o de un analítico completo de otra institución.</p>
-        </div>
+        <IngresarAnalitico
+           db={db}
+           appId={appId}
+           showMessage={showMessage}
+           materias={materias}
+           students={students}
+           matriculaciones={matriculaciones}
+           notas={notas}               // <-- pasar las notas para precarga/actualización
+        />
       )}
     </div>
   );
