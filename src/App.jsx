@@ -224,6 +224,23 @@ export default function App() {
   // App ID (calculado desde la config)
   const appId = useMemo(() => firebaseConfig.projectId || "default-app-id", [firebaseConfig]);
 
+  // Bandera segura para mostrar info de debug (compatible con Vite y entornos sin `process`)
+  const showDebug = (() => {
+    try {
+      // Prioriza variable específica (create .env Vite: VITE_SHOW_DEBUG=true)
+      if (typeof import !== 'undefined' && typeof import.meta !== 'undefined' && import.meta.env) {
+        if (import.meta.env.VITE_SHOW_DEBUG === 'true') return true;
+        if (import.meta.env.MODE === 'development') return true;
+      }
+      // Soporte para process.env si el bundler lo expone
+      if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_SHOW_DEBUG === 'true') return true;
+      // Mostrar en localhost por conveniencia
+      if (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') return true;
+    } catch (e) {
+      // ignore
+    }
+    return false;
+  })();
   // --- Inicialización y Autenticación ---
   useEffect(() => {
     // Activar logs detallados de Firestore
@@ -526,14 +543,13 @@ export default function App() {
       
       {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
       
-      {/* Caja de Debug: desactivada por defecto.
-         Para mostrarla explícitamente, defina REACT_APP_SHOW_DEBUG=true en su entorno. */}
-      {process.env.REACT_APP_SHOW_DEBUG === 'true' && debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
-   <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
-     <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
-     <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
-   </div>
-)}
+      {/* Caja de Debug: desactivada por defecto; visible si showDebug === true */}
+      {showDebug && debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
+        <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
+          <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
+          <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
+        </div>
+      )}
 
       {/* (NUEVO) Div de impresión para Certificado */}
       <div id="certificate-print-area" className="print-area"></div>
