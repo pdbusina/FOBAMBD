@@ -224,23 +224,6 @@ export default function App() {
   // App ID (calculado desde la config)
   const appId = useMemo(() => firebaseConfig.projectId || "default-app-id", [firebaseConfig]);
 
-  // Bandera segura para mostrar info de debug (compatible con Vite y entornos sin `process`)
-  const showDebug = (() => {
-    try {
-      // Prioriza variable específica (create .env Vite: VITE_SHOW_DEBUG=true)
-      if (typeof import !== 'undefined' && typeof import.meta !== 'undefined' && import.meta.env) {
-        if (import.meta.env.VITE_SHOW_DEBUG === 'true') return true;
-        if (import.meta.env.MODE === 'development') return true;
-      }
-      // Soporte para process.env si el bundler lo expone
-      if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_SHOW_DEBUG === 'true') return true;
-      // Mostrar en localhost por conveniencia
-      if (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') return true;
-    } catch (e) {
-      // ignore
-    }
-    return false;
-  })();
   // --- Inicialización y Autenticación ---
   useEffect(() => {
     // Activar logs detallados de Firestore
@@ -543,12 +526,12 @@ export default function App() {
       
       {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
       
-      {/* Caja de Debug: desactivada por defecto; visible si showDebug === true */}
-      {showDebug && debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
-        <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
-          <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
-          <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
-        </div>
+      {/* Caja de Debug (Desaparece si el ID es el de ejemplo) */}
+      {debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
+         <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
+           <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
+           <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
+         </div>
       )}
 
       {/* (NUEVO) Div de impresión para Certificado */}
@@ -1099,6 +1082,7 @@ const AdminDashboardScreen = ({
                 materias={materias}
                 students={students} 
                 matriculaciones={matriculaciones}
+                notas={notas}
                 notasSubTab={notasSubTab}
                 setNotasSubTab={setNotasSubTab}
                 snapshotToArray={snapshotToArray}
@@ -1191,9 +1175,8 @@ const AnaliticoTab = ({
                 showMessage(`Estudiante ${studentData.nombres} ${studentData.apellidos} encontrado.`, false);
             }
         } catch (error) {
-            console.error("Error buscando DNI en matriculación:", error);
-            showMessage(`Error al consultar los datos: ${error.message}`, true);
-            setSearchLoading(false);
+            console.error("Error buscando DNI:", error);
+            showMessage(`Error de búsqueda: ${error.message}`, true);
         } finally {
             setSearchLoading(false);
         }
@@ -1209,14 +1192,17 @@ const AnaliticoTab = ({
     const resetForm = () => {
         setStep(1);
         setDniSearch('');
-        setStudentInfo(null);
+        setSearchLoading(false);
         setFoundPlans([]);
         setSelectedPlan('');
+        setStudentInfo(null);
     };
-    
+
     return (
         <div id="gestion_analitico">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">5. Generar Analítico</h2>
+
+            {/* (AJUSTE) Input de URL del Logo (ELIMINADO) */}
 
             {/* Paso 1: Buscador de DNI */}
             {step === 1 && (
@@ -1534,8 +1520,8 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
  * Pestaña 4: Gestión de Notas (Contenedor Principal)
  */
 const NotasTab = ({ 
-    db, appId, showMessage, materias, students, matriculaciones,
-    notasSubTab, setNotasSubTab, snapshotToArray 
+    db, appId, showMessage, materias, students, matriculaciones, notas, 
+    notasSubTab, setNotasSubTab, snapshotToArray
 }) => {
   return (
     <div id="gestion_notas">
@@ -1585,10 +1571,15 @@ const NotasTab = ({
         />
       )}
       {notasSubTab === 'ingresar_analitico' && (
-        <div className="p-8 bg-purple-50 border border-purple-300 rounded-lg text-center">
-            <h3 className="text-xl font-semibold">Ingresar Analítico</h3>
-            <p className="mt-2 text-gray-600">Este módulo permitirá cargar notas por equivalencia o de un analítico completo de otra institución.</p>
-        </div>
+        <IngresarAnalitico
+           db={db}
+           appId={appId}
+           showMessage={showMessage}
+           materias={materias}
+           students={students}
+           matriculaciones={matriculaciones}
+           notas={notas}               // <-- pasar las notas para precarga/actualización
+        />
       )}
     </div>
   );
@@ -1670,9 +1661,8 @@ const IngresarNotaIndividual = ({
         } catch (error) {
             console.error("Error buscando DNI en matriculación:", error);
             showMessage(`Error de búsqueda: ${error.message}`, true);
+        } finally {
             setSearchLoading(false);
-<<<<<<< HEAD
-=======
         }
     };
 
@@ -1759,172 +1749,11 @@ const IngresarNotaIndividual = ({
         } catch (error) {
             console.error("Error guardando la nota:", error);
             showMessage(`Error al guardar: ${error.message}`, true);
->>>>>>> parent of 19d291b (cargar analitico)
         } finally {
             setSearchLoading(false);
         }
     };
 
-<<<<<<< HEAD
-    // Paso 2: Seleccionar Plan (y preparar formulario)
-    const handlePlanSelect = async (plan) => {
-        setSelectedPlan(plan);
-        setSearchLoading(true); // Usar loading mientras se procesan las materias
-
-        // 1. Filtrar materias del plan
-        const materiasFiltradas = materias.filter(m => m.plan === plan);
-
-        // 2. Ordenar por año, luego alfabéticamente (como se pidió)
-        materiasFiltradas.sort((a, b) => {
-            const anioA = Number(a.anio) || 0;
-            const anioB = Number(b.anio) || 0;
-            if (anioA !== anioB) return anioA - anioB;
-            return a.materia.localeCompare(b.materia);
-        });
-        
-        setMateriasDelPlan(materiasFiltradas);
-
-        // 3. Pre-cargar notas existentes
-        const notasExistentes = notas.filter(n => n.dni === studentInfo.dni && n.plan === plan);
-        const initialGrades = {};
-
-        for (const materia of materiasFiltradas) {
-            // Buscar la nota por nombre de materia
-            const nota = notasExistentes.find(n => n.materia === materia.materia);
-            
-            initialGrades[materia.id] = {
-                materia: materia.materia,
-                anio: materia.anio,
-                nota: nota ? nota.nota : '',
-                fecha: nota ? (nota.fecha || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
-                condicion: nota ? (nota.condicion || 'Equivalencia') : 'Equivalencia',
-                libro_folio: nota ? (nota.libro_folio || '') : '',
-                obs_optativa_ensamble: nota ? (nota.obs_optativa_ensamble || '') : '',
-                existingNoteId: nota ? nota.id : null // ID original para saber si actualizar o crear
-            };
-        }
-        
-        setGradeData(initialGrades);
-        setStep(3); // Mostrar formulario
-        setSearchLoading(false);
-    };
-
-    // Agrupar materias por año para la UI
-    const materiasAgrupadas = useMemo(() => {
-        if (step !== 3) return {};
-        return materiasDelPlan.reduce((acc, materia) => {
-            const anio = materia.anio || 'N/A';
-            if (!acc[anio]) acc[anio] = [];
-            acc[anio].push(materia);
-            return acc;
-        }, {});
-    }, [materiasDelPlan, step]);
-
-    const aniosOrdenados = Object.keys(materiasAgrupadas).sort((a,b) => a.localeCompare(b, undefined, { numeric: true }));
-
-    // Manejar cambio en un campo de nota
-    const handleGradeChange = (materiaId, e) => {
-        const { name, value } = e.target;
-        setGradeData(prev => ({
-            ...prev,
-            [materiaId]: {
-                ...prev[materiaId],
-                [name]: value
-            }
-        }));
-    };
-
-    // Guardar TODO el analítico
-    const handleSaveAnalitico = async (e) => {
-        e.preventDefault();
-        setSaveLoading(true);
-
-        const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
-        const promises = [];
-        let notasProcesadas = 0;
-
-        try {
-            for (const materiaId in gradeData) {
-                const grade = gradeData[materiaId];
-
-                // Solo procesar si se ingresó una calificación
-                if (grade.nota && grade.nota.trim() !== '') {
-                    notasProcesadas++;
-                    
-                    const dataToSave = {
-                        dni: studentInfo.dni,
-                        nombres: studentInfo.nombres,
-                        apellidos: studentInfo.apellidos,
-                        plan: selectedPlan,
-                        materia: grade.materia,
-                        anio: grade.anio,
-                        nota: grade.nota,
-                        fecha: grade.fecha,
-                        condicion: grade.condicion,
-                        libro_folio: grade.libro_folio,
-                        obs_optativa_ensamble: grade.obs_optativa_ensamble || '',
-                        observaciones: 'Ingresado por Analítico', // Observación genérica
-                        timestamp: Timestamp.now()
-                    };
-
-                    if (grade.existingNoteId) {
-                        // Actualizar nota existente
-                        const docRef = doc(notasRef, grade.existingNoteId);
-                        promises.push(setDoc(docRef, dataToSave, { merge: true }));
-                    } else {
-                        // Crear nota nueva
-                        promises.push(addDoc(notasRef, dataToSave));
-                    }
-                }
-            }
-
-            await Promise.all(promises);
-            
-            if (notasProcesadas > 0) {
-                showMessage(`Analítico guardado: ${notasProcesadas} notas fueron creadas/actualizadas.`, false);
-            } else {
-                showMessage("No se ingresaron nuevas calificaciones para guardar.", false);
-            }
-            
-            resetForm(true); // Resetear todo
-
-        } catch (error) {
-            console.error("Error al guardar analítico:", error);
-            showMessage(`Error al guardar: ${error.message}`, true);
-        } finally {
-            setSaveLoading(false);
-        }
-    };
-
-    // Resetear el flujo completo
-    const resetForm = (fullReset = true) => {
-        setStep(1);
-        if (fullReset) {
-            setDniSearch('');
-        }
-        setSaveLoading(false);
-        setFoundPlans([]);
-        setSelectedPlan('');
-        setStudentInfo(null);
-        setGradeData({});
-        setMateriasDelPlan([]);
-    };
-
-    return (
-        <div className="max-w-6xl mx-auto">
-            {/* Paso 1: Buscador de DNI */}
-            {step === 1 && (
-                <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200 max-w-lg mx-auto">
-                    <label htmlFor="dni_search_analitico" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
-                    <div className="mt-1 flex space-x-2">
-                        <input 
-                            type="text" 
-                            id="dni_search_analitico"
-                            value={dniSearch}
-                            onChange={(e) => setDniSearch(e.target.value)}
-                            className="flex-grow rounded-md border-gray-300 shadow-sm p-3 border"
-                            placeholder="Buscar DNI..."
-=======
     // Resetear el flujo completo
     const resetForm = () => {
         setStep(1);
@@ -1960,7 +1789,6 @@ const IngresarNotaIndividual = ({
                             onChange={(e) => setDniSearch(e.target.value)}
                             className="flex-grow rounded-md border-gray-300 shadow-sm p-3 border"
                             placeholder="Buscar DNI en matriculaciones..."
->>>>>>> parent of 19d291b (cargar analitico)
                             required
                         />
                         <button 
@@ -1976,15 +1804,9 @@ const IngresarNotaIndividual = ({
 
             {/* Paso 2: Selector de Plan (si aplica) */}
             {step === 2 && studentInfo && (
-<<<<<<< HEAD
-                <div className="p-6 bg-white rounded-lg shadow-md border max-w-lg mx-auto">
-                    <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
-                    <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno:</p>
-=======
                 <div className="p-6 bg-white rounded-lg shadow-md border">
                     <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
                     <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno para cargar la nota:</p>
->>>>>>> parent of 19d291b (cargar analitico)
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {foundPlans.map(plan => (
                             <button
@@ -1996,122 +1818,6 @@ const IngresarNotaIndividual = ({
                             </button>
                         ))}
                     </div>
-<<<<<<< HEAD
-                    <button onClick={() => resetForm(true)} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
-                </div>
-            )}
-
-            {/* Paso 3: Formulario de Carga de Analítico */}
-            {step === 3 && studentInfo && (
-                <form onSubmit={handleSaveAnalitico} className="p-6 bg-white rounded-lg shadow-md border space-y-6">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h3 className="text-xl font-semibold text-gray-800">Ingresar Analítico</h3>
-                            <p className="text-gray-600">Estudiante: <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> (DNI: {studentInfo.dni})</p>
-                            <p className="text-gray-600">Plan Seleccionado: <strong>{selectedPlan}</strong></p>
-                        </div>
-                        <button type="button" onClick={() => resetForm(true)} className="text-sm text-indigo-600 hover:text-indigo-800">&larr; Cancelar</button>
-                    </div>
-
-                    <div className="border-t pt-4 space-y-4">
-                        <p className="text-sm text-gray-600">Ingrese los datos de las materias a acreditar. Las materias sin calificación serán ignoradas. Las notas existentes se pre-cargan y pueden ser modificadas.</p>
-                        
-                        {/* Cabeceras de la tabla */}
-                        <div className="grid grid-cols-12 gap-x-2 px-2 pb-2 border-b font-medium text-sm text-gray-600">
-                            <div className="col-span-3">Materia</div>
-                            <div className="col-span-2">Optativa/Ensamble (si aplica)</div>
-                            <div className="col-span-2">Fecha</div>
-                            <div className="col-span-2">Condición</div>
-                            <div className="col-span-1">Nota *</div>
-                            <div className="col-span-2">Libro/Folio</div>
-                        </div>
-
-                        {/* Contenido de la tabla (Materias) */}
-                        <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
-                            {aniosOrdenados.map(anio => (
-                                <div key={anio} className="space-y-2">
-                                    <h4 className="text-md font-semibold text-indigo-700 bg-indigo-50 p-2 rounded-md sticky top-0">Año {anio}</h4>
-                                    {materiasAgrupadas[anio].map(materia => {
-                                        const grade = gradeData[materia.id];
-                                        if (!grade) return null;
-                                        
-                                        return (
-                                            <div key={materia.id} className="grid grid-cols-12 gap-x-2 items-center p-2 hover:bg-gray-50 rounded">
-                                                {/* Nombre Materia */}
-                                                <div className="col-span-3 text-sm font-medium text-gray-800">
-                                                    {materia.materia}
-                                                </div>
-                                                
-                                                {/* Obs Optativa/Ensamble */}
-                                                <div className="col-span-2">
-                                                    {isMateriaCondicional(materia.materia) ? (
-                                                        <input 
-                                                            type="text"
-                                                            name="obs_optativa_ensamble"
-                                                            value={grade.obs_optativa_ensamble}
-                                                            onChange={(e) => handleGradeChange(materia.id, e)}
-                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
-                                                            placeholder="Ej: Rock"
-                                                        />
-                                                    ) : (
-                                                        <div className="h-9 p-2 text-sm text-gray-400 italic">N/A</div>
-                                                    )}
-                                                </div>
-
-                                                {/* Fecha */}
-                                                <div className="col-span-2">
-                                                    <input 
-                                                        type="date"
-                                                        name="fecha"
-                                                        value={grade.fecha}
-                                                        onChange={(e) => handleGradeChange(materia.id, e)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
-                                                    />
-                                                </div>
-
-                                                {/* Condición */}
-                                                <div className="col-span-2">
-                                                    <select 
-                                                        name="condicion"
-                                                        value={grade.condicion}
-                                                        onChange={(e) => handleGradeChange(materia.id, e)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
-                                                    >
-                                                        <option>Equivalencia</option>
-                                                        <option>Promoción</option>
-                                                        <option>Examen</option>
-                                                    </select>
-                                                </div>
-                                                
-                                                {/* Nota */}
-                                                <div className="col-span-1">
-                                                    <input 
-                                                        type="text"
-                                                        name="nota"
-                                                        value={grade.nota}
-                                                        onChange={(e) => handleGradeChange(materia.id, e)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
-                                                        placeholder="Ej: 9"
-                                                    />
-                                                </div>
-
-                                                {/* Libro/Folio */}
-                                                <div className="col-span-2">
-                                                    <input 
-                                                        type="text"
-                                                        name="libro_folio"
-                                                        value={grade.libro_folio}
-                                                        onChange={(e) => handleGradeChange(materia.id, e)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
-                                                        placeholder="Ej: L1 F23"
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-=======
                     <button onClick={resetForm} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
                 </div>
             )}
@@ -2246,7 +1952,6 @@ const IngresarNotaIndividual = ({
                                     placeholder="Cualquier observación adicional..."
                                 ></textarea>
                             </div>
->>>>>>> parent of 19d291b (cargar analitico)
                         </div>
                     </div>
 
@@ -2254,17 +1959,10 @@ const IngresarNotaIndividual = ({
                     <div className="border-t pt-4">
                         <button 
                             type="submit" 
-<<<<<<< HEAD
-                            disabled={saveLoading || searchLoading}
-                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
-                        >
-                            {saveLoading ? <IconLoading /> : 'Guardar Analítico'}
-=======
                             disabled={searchLoading}
                             className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                         >
                             {searchLoading ? <IconLoading /> : 'Guardar Nota'}
->>>>>>> parent of 19d291b (cargar analitico)
                         </button>
                     </div>
                 </form>
@@ -2272,8 +1970,6 @@ const IngresarNotaIndividual = ({
         </div>
     );
 };
-<<<<<<< HEAD
-=======
 
 /**
  * Sub-Pestaña 4.2: Ingresar Planilla
@@ -2699,9 +2395,391 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
         </div>
     );
 };
+/**
+ * (NUEVO) Sub-Pestaña 4.3: Ingresar Analítico Completo
+ */
+const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matriculaciones, notas }) => {
+    
+    const [step, setStep] = useState(1); // 1: DNI, 2: Plan, 3: Form
+    const [dniSearch, setDniSearch] = useState('');
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [saveLoading, setSaveLoading] = useState(false);
+    
+    const [studentInfo, setStudentInfo] = useState(null); // Full student object
+    const [foundPlans, setFoundPlans] = useState([]);
+    const [selectedPlan, setSelectedPlan] = useState('');
+    
+    // Almacena los datos del formulario: { materiaId: { nota: '', fecha: '', ... }, ... }
+    const [gradeData, setGradeData] = useState({});
+    
+    // Almacena la lista de materias filtrada y ordenada para el plan
+    const [materiasDelPlan, setMateriasDelPlan] = useState([]);
 
->>>>>>> parent of 19d291b (cargar analitico)
+    const materiasCondicionales = [
+        'optativa 1', 'optativa 2', 
+        'ensamble 1', 'ensamble 2', 'ensamble 3', 'ensamble 4'
+    ];
 
+    const isMateriaCondicional = (materiaNombre) => {
+        if (!materiaNombre) return false;
+        return materiasCondicionales.includes(materiaNombre.toLowerCase());
+    };
+
+    // Paso 1: Buscar DNI
+    const handleDniSearch = async (e) => {
+        e.preventDefault();
+        if (!dniSearch) return showMessage("Ingrese un DNI.", true);
+        
+        setSearchLoading(true);
+        resetForm(false); // Limpiar datos, pero mantener DNI
+
+        try {
+            const matriculasDelDNI = matriculaciones.filter(m => m.dni === dniSearch);
+            const studentData = students.find(s => s.dni === dniSearch);
+
+            if (matriculasDelDNI.length === 0 || !studentData) {
+                showMessage(`DNI ${dniSearch} no encontrado o sin matriculaciones.`, true);
+                setStep(1);
+            } else {
+                const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
+                setStudentInfo(studentData); // Guardar info completa de 'students'
+
+                if (planesUnicos.length > 1) {
+                    setFoundPlans(planesUnicos);
+                    setStep(2);
+                } else {
+                    // Si solo hay un plan, saltar directo al formulario
+                    await handlePlanSelect(planesUnicos[0]);
+                }
+                showMessage(`Estudiante ${studentData.nombres} ${studentData.apellidos} encontrado.`, false);
+            }
+        } catch (error) {
+            console.error("Error buscando DNI:", error);
+            showMessage(`Error de búsqueda: ${error.message}`, true);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    // Paso 2: Seleccionar Plan (y preparar formulario)
+    const handlePlanSelect = async (plan) => {
+        setSelectedPlan(plan);
+        setSearchLoading(true); // Usar loading mientras se procesan las materias
+
+        // 1. Filtrar materias del plan
+        const materiasFiltradas = materias.filter(m => m.plan === plan);
+
+        // 2. Ordenar por año, luego alfabéticamente (como se pidió)
+        materiasFiltradas.sort((a, b) => {
+            const anioA = Number(a.anio) || 0;
+            const anioB = Number(b.anio) || 0;
+            if (anioA !== anioB) return anioA - anioB;
+            return a.materia.localeCompare(b.materia);
+        });
+        
+        setMateriasDelPlan(materiasFiltradas);
+
+        // 3. Pre-cargar notas existentes
+        const notasExistentes = notas.filter(n => n.dni === studentInfo.dni && n.plan === plan);
+        const initialGrades = {};
+
+        for (const materia of materiasFiltradas) {
+            // Buscar la nota por nombre de materia
+            const nota = notasExistentes.find(n => n.materia === materia.materia);
+            
+            initialGrades[materia.id] = {
+                materia: materia.materia,
+                anio: materia.anio,
+                nota: nota ? nota.nota : '',
+                fecha: nota ? (nota.fecha || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
+                condicion: nota ? (nota.condicion || 'Equivalencia') : 'Equivalencia',
+                libro_folio: nota ? (nota.libro_folio || '') : '',
+                obs_optativa_ensamble: nota ? (nota.obs_optativa_ensamble || '') : '',
+                existingNoteId: nota ? nota.id : null // ID original para saber si actualizar o crear
+            };
+        }
+        
+        setGradeData(initialGrades);
+        setStep(3); // Mostrar formulario
+        setSearchLoading(false);
+    };
+
+    // Agrupar materias por año para la UI
+    const materiasAgrupadas = useMemo(() => {
+        if (step !== 3) return {};
+        return materiasDelPlan.reduce((acc, materia) => {
+            const anio = materia.anio || 'N/A';
+            if (!acc[anio]) acc[anio] = [];
+            acc[anio].push(materia);
+            return acc;
+        }, {});
+    }, [materiasDelPlan, step]);
+
+    const aniosOrdenados = Object.keys(materiasAgrupadas).sort((a,b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    // Manejar cambio en un campo de nota
+    const handleGradeChange = (materiaId, e) => {
+        const { name, value } = e.target;
+        setGradeData(prev => ({
+            ...prev,
+            [materiaId]: {
+                ...prev[materiaId],
+                [name]: value
+            }
+        }));
+    };
+
+    // Guardar TODO el analítico
+    const handleSaveAnalitico = async (e) => {
+        e.preventDefault();
+        setSaveLoading(true);
+
+        const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
+        const promises = [];
+        let notasProcesadas = 0;
+
+        try {
+            for (const materiaId in gradeData) {
+                const grade = gradeData[materiaId];
+
+                // Solo procesar si se ingresó una calificación
+                if (grade.nota && grade.nota.trim() !== '') {
+                    notasProcesadas++;
+                    
+                    const dataToSave = {
+                        dni: studentInfo.dni,
+                        nombres: studentInfo.nombres,
+                        apellidos: studentInfo.apellidos,
+                        plan: selectedPlan,
+                        materia: grade.materia,
+                        anio: grade.anio,
+                        nota: grade.nota,
+                        fecha: grade.fecha,
+                        condicion: grade.condicion,
+                        libro_folio: grade.libro_folio,
+                        obs_optativa_ensamble: grade.obs_optativa_ensamble || '',
+                        observaciones: 'Ingresado por Analítico', // Observación genérica
+                        timestamp: Timestamp.now()
+                    };
+
+                    if (grade.existingNoteId) {
+                        // Actualizar nota existente
+                        const docRef = doc(notasRef, grade.existingNoteId);
+                        promises.push(setDoc(docRef, dataToSave, { merge: true }));
+                    } else {
+                        // Crear nota nueva
+                        promises.push(addDoc(notasRef, dataToSave));
+                    }
+                }
+            }
+
+            await Promise.all(promises);
+            
+            if (notasProcesadas > 0) {
+                showMessage(`Analítico guardado: ${notasProcesadas} notas fueron creadas/actualizadas.`, false);
+            } else {
+                showMessage("No se ingresaron nuevas calificaciones para guardar.", false);
+            }
+            
+            resetForm(true); // Resetear todo
+
+        } catch (error) {
+            console.error("Error al guardar analítico:", error);
+            showMessage(`Error al guardar: ${error.message}`, true);
+        } finally {
+            setSaveLoading(false);
+        }
+    };
+
+    // Resetear el flujo completo
+    const resetForm = (fullReset = true) => {
+        setStep(1);
+        if (fullReset) {
+            setDniSearch('');
+        }
+        setSaveLoading(false);
+        setFoundPlans([]);
+        setSelectedPlan('');
+        setStudentInfo(null);
+        setGradeData({});
+        setMateriasDelPlan([]);
+    };
+
+    return (
+        <div className="max-w-6xl mx-auto">
+            {/* Paso 1: Buscador de DNI */}
+            {step === 1 && (
+                <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200 max-w-lg mx-auto">
+                    <label htmlFor="dni_search_analitico" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
+                    <div className="mt-1 flex space-x-2">
+                        <input 
+                            type="text" 
+                            id="dni_search_analitico"
+                            value={dniSearch}
+                            onChange={(e) => setDniSearch(e.target.value)}
+                            className="flex-grow rounded-md border-gray-300 shadow-sm p-3 border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
+                            placeholder="Buscar DNI..."
+                            required
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={searchLoading}
+                            className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                        >
+                            {searchLoading ? <IconLoading /> : 'Buscar'}
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {/* Paso 2: Selector de Plan (si aplica) */}
+            {step === 2 && studentInfo && (
+                <div className="p-6 bg-white rounded-lg shadow-md border max-w-lg mx-auto">
+                    <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
+                    <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {foundPlans.map(plan => (
+                            <button
+                                key={plan}
+                                onClick={() => handlePlanSelect(plan)}
+                                className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300"
+                            >
+                                {plan}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={() => resetForm(true)} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
+                </div>
+            )}
+
+            {/* Paso 3: Formulario de Carga de Analítico */}
+            {step === 3 && studentInfo && (
+                <form onSubmit={handleSaveAnalitico} className="p-6 bg-white rounded-lg shadow-md border space-y-6">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-xl font-semibold text-gray-800">Ingresar Analítico</h3>
+                            <p className="text-gray-600">Estudiante: <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> (DNI: {studentInfo.dni})</p>
+                            <p className="text-gray-600">Plan Seleccionado: <strong>{selectedPlan}</strong></p>
+                        </div>
+                        <button type="button" onClick={() => resetForm(true)} className="text-sm text-indigo-600 hover:text-indigo-800">&larr; Cancelar</button>
+                    </div>
+
+                    <div className="border-t pt-4 space-y-4">
+                        <p className="text-sm text-gray-600">Ingrese los datos de las materias a acreditar. Las materias sin calificación serán ignoradas. Las notas existentes se pre-cargan y pueden ser modificadas.</p>
+                        
+                        {/* Cabeceras de la tabla */}
+                        <div className="grid grid-cols-12 gap-x-2 px-2 pb-2 border-b font-medium text-sm text-gray-600">
+                            <div className="col-span-3">Materia</div>
+                            <div className="col-span-2">Optativa/Ensamble (si aplica)</div>
+                            <div className="col-span-2">Fecha</div>
+                            <div className="col-span-2">Condición</div>
+                            <div className="col-span-1">Nota *</div>
+                            <div className="col-span-2">Libro/Folio</div>
+                        </div>
+
+                        {/* Contenido de la tabla (Materias) */}
+                        <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                            {aniosOrdenados.map(anio => (
+                                <div key={anio} className="space-y-2">
+                                    <h4 className="text-md font-semibold text-indigo-700 bg-indigo-50 p-2 rounded-md sticky top-0">Año {anio}</h4>
+                                    {materiasAgrupadas[anio].map(materia => {
+                                        const grade = gradeData[materia.id];
+                                        if (!grade) return null;
+                                        
+                                        return (
+                                            <div key={materia.id} className="grid grid-cols-12 gap-x-2 items-center p-2 hover:bg-gray-50 rounded">
+                                                {/* Nombre Materia */}
+                                                <div className="col-span-3 text-sm font-medium text-gray-800">
+                                                    {materia.materia}
+                                                </div>
+                                                
+                                                {/* Obs Optativa/Ensamble */}
+                                                <div className="col-span-2">
+                                                    {isMateriaCondicional(materia.materia) ? (
+                                                        <input 
+                                                            type="text"
+                                                            name="obs_optativa_ensamble"
+                                                            value={grade.obs_optativa_ensamble}
+                                                            onChange={(e) => handleGradeChange(materia.id, e)}
+                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
+                                                            placeholder="Ej: Rock"
+                                                        />
+                                                    ) : (
+                                                        <div className="h-9 p-2 text-sm text-gray-400 italic">N/A</div>
+                                                    )}
+                                                </div>
+
+                                                {/* Fecha */}
+                                                <div className="col-span-2">
+                                                    <input 
+                                                        type="date"
+                                                        name="fecha"
+                                                        value={grade.fecha}
+                                                        onChange={(e) => handleGradeChange(materia.id, e)}
+                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
+                                                    />
+                                                </div>
+
+                                                {/* Condición */}
+                                                <div className="col-span-2">
+                                                    <select 
+                                                        name="condicion"
+                                                        value={grade.condicion}
+                                                        onChange={(e) => handleGradeChange(materia.id, e)}
+                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
+                                                    >
+                                                        <option>Equivalencia</option>
+                                                        <option>Promoción</option>
+                                                        <option>Examen</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                {/* Nota */}
+                                                <div className="col-span-1">
+                                                    <input 
+                                                        type="text"
+                                                        name="nota"
+                                                        value={grade.nota}
+                                                        onChange={(e) => handleGradeChange(materia.id, e)}
+                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
+                                                        placeholder="Ej: 9"
+                                                    />
+                                                </div>
+
+                                                {/* Libro/Folio */}
+                                                <div className="col-span-2">
+                                                    <input 
+                                                        type="text"
+                                                        name="libro_folio"
+                                                        value={grade.libro_folio}
+                                                        onChange={(e) => handleGradeChange(materia.id, e)}
+                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-150"
+                                                        placeholder="Ej: L1 F23"
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Botón de Guardar */}
+                    <div className="border-t pt-4">
+                        <button 
+                            type="submit" 
+                            disabled={saveLoading || searchLoading}
+                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
+                        >
+                            {saveLoading ? <IconLoading /> : 'Guardar Analítico'}
+                        </button>
+                    </div>
+                </form>
+            )}
+        </div>
+    );
+};
 
 /**
  * Pestaña 1: Inscribir / Editar Estudiante
@@ -2901,7 +2979,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
     const currentYear = new Date().getFullYear().toString();
     const currentDate = new Date().toISOString().split('T')[0];
 
-    // (FIX 1) Filtrar matriculaciones del año actual para el listado
+    // (FIX) Filtrar matriculaciones del año actual para el listado
     const matriculacionesDelAnio = useMemo(() => {
         return matriculaciones.filter(m => m.cicloLectivo === currentYear);
     }, [matriculaciones, currentYear]);
@@ -3098,7 +3176,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
                 {/* Columna 2: Listado de Matriculados (Año en curso) */}
                 <div>
                     <h2 className="text-2xl font-semibold text-gray-800 mb-4">Matriculados {currentYear} ({matriculacionesDelAnio.length})</h2>
-                    <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200 max-h-[60vh] overflow-y-auto">
+                    <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200 max-h-[70vh] overflow-y-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-indigo-600 text-white sticky top-0">
                                 <tr>
@@ -3258,7 +3336,6 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
         </div>
     );
 };
-
 
 /**
  * Pestaña 6: Admin Materias
