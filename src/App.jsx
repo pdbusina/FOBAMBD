@@ -527,12 +527,14 @@ export default function App() {
       {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
       
       {/* Caja de Debug (Desaparece si el ID es el de ejemplo) */}
+      {/*
       {debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
          <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
            <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
            <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
          </div>
       )}
+      */}
 
       {/* (NUEVO) Div de impresión para Certificado */}
       <div id="certificate-print-area" className="print-area"></div>
