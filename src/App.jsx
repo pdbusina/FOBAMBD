@@ -1671,11 +1671,101 @@ const IngresarNotaIndividual = ({
             console.error("Error buscando DNI en matriculación:", error);
             showMessage(`Error de búsqueda: ${error.message}`, true);
             setSearchLoading(false);
+<<<<<<< HEAD
+=======
+        }
+    };
+
+    // Paso 2: Seleccionar Plan (si hay múltiples)
+    const handlePlanSelect = (plan) => {
+        setSelectedPlan(plan);
+        setStep(3);
+    };
+
+    // Paso 3: Manejar cambios en el formulario de nota
+    const handleNotaFormChange = (e) => {
+        const { name, value } = e.target;
+        setNotaForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    // Manejar selección de materia (para campo condicional)
+    const handleMateriaChange = (e) => {
+        const materiaId = e.target.value;
+        setSelectedMateriaId(materiaId);
+        
+        if (materiaId) {
+            const materiaSeleccionada = materias.find(m => m.id === materiaId);
+            if (!materiaSeleccionada) {
+                 // Fallback por si la materia no está
+                setShowObsField(false);
+                setNotaForm(prev => ({ ...prev, materia: 'Error - Materia no encontrada', obs_optativa_ensamble: '' }));
+                return;
+            }
+            
+            const materiaNombre = materiaSeleccionada.materia.toLowerCase();
+            
+            // Actualizar el nombre de la materia en el formulario
+            setNotaForm(prev => ({ ...prev, materia: materiaSeleccionada.materia }));
+            
+            // Verificar si es condicional
+            if (materiasCondicionales.includes(materiaNombre)) {
+                setShowObsField(true);
+            } else {
+                setShowObsField(false);
+                setNotaForm(prev => ({ ...prev, obs_optativa_ensamble: '' }));
+            }
+        } else {
+            // Limpiar
+            setShowObsField(false);
+            setNotaForm(prev => ({ ...prev, materia: '', obs_optativa_ensamble: '' }));
+        }
+    };
+
+    // Filtrar materias por el plan seleccionado
+    const materiasDelPlan = useMemo(() => {
+        if (!selectedPlan || materias.length === 0) return [];
+        return materias.filter(m => m.plan === selectedPlan);
+    }, [selectedPlan, materias]);
+
+    // Guardar la nota
+    const handleSaveNota = async (e) => {
+        e.preventDefault();
+        
+        // Validación
+        if (!selectedMateriaId || !notaForm.nota || !notaForm.fecha || !notaForm.condicion) {
+            return showMessage("Complete todos los campos obligatorios (Materia, Calificación, Fecha, Condición).", true);
+        }
+        if (showObsField && !notaForm.obs_optativa_ensamble) {
+            return showMessage("Por favor, especifique la Optativa o Ensamble.", true);
+        }
+
+        setSearchLoading(true); // Reutilizar el estado de loading
+        
+        const notaData = {
+            ...studentInfo, // dni, nombres, apellidos
+            plan: selectedPlan,
+            ...notaForm,
+            timestamp: Timestamp.now()
+        };
+
+        try {
+            const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
+            await addDoc(notasRef, notaData);
+            
+            showMessage("Nota guardada exitosamente.", false);
+            // Resetear todo
+            resetForm();
+
+        } catch (error) {
+            console.error("Error guardando la nota:", error);
+            showMessage(`Error al guardar: ${error.message}`, true);
+>>>>>>> parent of 19d291b (cargar analitico)
         } finally {
             setSearchLoading(false);
         }
     };
 
+<<<<<<< HEAD
     // Paso 2: Seleccionar Plan (y preparar formulario)
     const handlePlanSelect = async (plan) => {
         setSelectedPlan(plan);
@@ -1834,6 +1924,43 @@ const IngresarNotaIndividual = ({
                             onChange={(e) => setDniSearch(e.target.value)}
                             className="flex-grow rounded-md border-gray-300 shadow-sm p-3 border"
                             placeholder="Buscar DNI..."
+=======
+    // Resetear el flujo completo
+    const resetForm = () => {
+        setStep(1);
+        setDniSearch('');
+        setSearchLoading(false);
+        setFoundPlans([]);
+        setSelectedPlan('');
+        setStudentInfo({ dni: '', nombres: '', apellidos: '' });
+        setSelectedMateriaId('');
+        setShowObsField(false);
+        setNotaForm({
+            materia: '',
+            obs_optativa_ensamble: '',
+            nota: '',
+            fecha: new Date().toISOString().split('T')[0],
+            libro_folio: '',
+            condicion: 'Promoción',
+            observaciones: ''
+        });
+    };
+
+    return (
+        <div className="max-w-2xl mx-auto">
+            {/* Paso 1: Buscador de DNI */}
+            {step === 1 && (
+                <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <label htmlFor="dni_search_nota" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
+                    <div className="mt-1 flex space-x-2">
+                        <input 
+                            type="text" 
+                            id="dni_search_nota"
+                            value={dniSearch}
+                            onChange={(e) => setDniSearch(e.target.value)}
+                            className="flex-grow rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="Buscar DNI en matriculaciones..."
+>>>>>>> parent of 19d291b (cargar analitico)
                             required
                         />
                         <button 
@@ -1849,9 +1976,15 @@ const IngresarNotaIndividual = ({
 
             {/* Paso 2: Selector de Plan (si aplica) */}
             {step === 2 && studentInfo && (
+<<<<<<< HEAD
                 <div className="p-6 bg-white rounded-lg shadow-md border max-w-lg mx-auto">
                     <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
                     <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno:</p>
+=======
+                <div className="p-6 bg-white rounded-lg shadow-md border">
+                    <h3 className="text-lg font-semibold text-gray-800">Múltiples Planes Encontrados</h3>
+                    <p className="text-gray-600 mb-4">El estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado en varios planes. Por favor, seleccione uno para cargar la nota:</p>
+>>>>>>> parent of 19d291b (cargar analitico)
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {foundPlans.map(plan => (
                             <button
@@ -1863,6 +1996,7 @@ const IngresarNotaIndividual = ({
                             </button>
                         ))}
                     </div>
+<<<<<<< HEAD
                     <button onClick={() => resetForm(true)} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
                 </div>
             )}
@@ -1977,6 +2111,142 @@ const IngresarNotaIndividual = ({
                                     })}
                                 </div>
                             ))}
+=======
+                    <button onClick={resetForm} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
+                </div>
+            )}
+
+            {/* Paso 3: Formulario de Carga de Nota */}
+            {step === 3 && studentInfo && (
+                <form onSubmit={handleSaveNota} className="p-6 bg-white rounded-lg shadow-md border space-y-4">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-xl font-semibold text-gray-800">Cargar Nota</h3>
+                            <p className="text-gray-600">Estudiante: <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> (DNI: {studentInfo.dni})</p>
+                            <p className="text-gray-600">Plan Seleccionado: <strong>{selectedPlan}</strong></p>
+                        </div>
+                        <button type="button" onClick={resetForm} className="text-sm text-indigo-600 hover:text-indigo-800">&larr; Cancelar</button>
+                    </div>
+
+                    <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Columna 1 */}
+                        <div className="space-y-4">
+                            {/* Materia */}
+                            <div>
+                                <label htmlFor="materia" className="block text-sm font-medium text-gray-700">Materia (del plan {selectedPlan})</label>
+                                <select 
+                                    id="materia" 
+                                    name="materia"
+                                    value={selectedMateriaId}
+                                    onChange={handleMateriaChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    required
+                                >
+                                    <option value="">Seleccione una materia...</option>
+                                    {materiasDelPlan.length > 0 ? (
+                                        materiasDelPlan.map(m => (
+                                            <option key={m.id} value={m.id}>{m.materia} (Año {m.anio})</option>
+                                        ))
+                                    ) : (
+                                        <option disabled>No hay materias cargadas para este plan.</option>
+                                    )}
+                                </select>
+                            </div>
+
+                            {/* Campo Condicional (Optativa/Ensamble) */}
+                            {showObsField && (
+                                <div>
+                                    <label htmlFor="obs_optativa_ensamble" className="block text-sm font-medium text-gray-700">Especifique Optativa/Ensamble</label>
+                                    <input 
+                                        type="text" 
+                                        id="obs_optativa_ensamble"
+                                        name="obs_optativa_ensamble"
+                                        value={notaForm.obs_optativa_ensamble}
+                                        onChange={handleNotaFormChange}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                        placeholder="Ej: Ensamble de Rock"
+                                        required
+                                    />
+                                </div>
+                            )}
+
+                            {/* Calificación */}
+                            <div>
+                                <label htmlFor="nota" className="block text-sm font-medium text-gray-700">Calificación</label>
+                                <input 
+                                    type="text" 
+                                    id="nota"
+                                    name="nota"
+                                    value={notaForm.nota}
+                                    onChange={handleNotaFormChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    placeholder="Ej: 9 (Nueve) ó AP (Aprobado)"
+                                    required
+                                />
+                            </div>
+
+                            {/* Fecha */}
+                            <div>
+                                <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">Fecha</label>
+                                <input 
+                                    type="date" 
+                                    id="fecha"
+                                    name="fecha"
+                                    value={notaForm.fecha}
+                                    onChange={handleNotaFormChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Columna 2 */}
+                        <div className="space-y-4">
+                            {/* Condición */}
+                            <div>
+                                <label htmlFor="condicion" className="block text-sm font-medium text-gray-700">Condición</label>
+                                <select 
+                                    id="condicion" 
+                                    name="condicion"
+                                    value={notaForm.condicion}
+                                    onChange={handleNotaFormChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    required
+                                >
+                                    <option>Promoción</option>
+                                    <option>Examen</option>
+                                    <option>Equivalencia</option>
+                                </select>
+                            </div>
+
+                            {/* Libro/Folio */}
+                            <div>
+                                <label htmlFor="libro_folio" className="block text-sm font-medium text-gray-700">Libro y Folio</label>
+                                <input 
+                                    type="text" 
+                                    id="libro_folio"
+                                    name="libro_folio"
+                                    value={notaForm.libro_folio}
+                                    onChange={handleNotaFormChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    placeholder="Ej: L1 F23"
+                                />
+                            </div>
+
+                            {/* Observaciones */}
+                            <div>
+                                <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700">Observaciones</label>
+                                <textarea 
+                                    id="observaciones"
+                                    name="observaciones"
+                                    rows="4"
+                                    value={notaForm.observaciones}
+                                    onChange={handleNotaFormChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    placeholder="Cualquier observación adicional..."
+                                ></textarea>
+                            </div>
+>>>>>>> parent of 19d291b (cargar analitico)
                         </div>
                     </div>
 
@@ -1984,10 +2254,17 @@ const IngresarNotaIndividual = ({
                     <div className="border-t pt-4">
                         <button 
                             type="submit" 
+<<<<<<< HEAD
                             disabled={saveLoading || searchLoading}
                             className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                         >
                             {saveLoading ? <IconLoading /> : 'Guardar Analítico'}
+=======
+                            disabled={searchLoading}
+                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
+                        >
+                            {searchLoading ? <IconLoading /> : 'Guardar Nota'}
+>>>>>>> parent of 19d291b (cargar analitico)
                         </button>
                     </div>
                 </form>
@@ -1995,6 +2272,435 @@ const IngresarNotaIndividual = ({
         </div>
     );
 };
+<<<<<<< HEAD
+=======
+
+/**
+ * Sub-Pestaña 4.2: Ingresar Planilla
+ */
+const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matriculaciones }) => {
+    
+    // Nombres únicos de materias (alfabético)
+    const uniqueMaterias = useMemo(() => {
+        const names = new Set(materias.map(m => m.materia));
+        return [...names].sort();
+    }, [materias]);
+
+    // (FIX 1) Opciones para el desplegable de DNI (desde matriculaciones)
+    const studentOptions = useMemo(() => {
+        const uniqueStudents = new Map();
+        
+        matriculaciones.forEach(m => {
+            if (!uniqueStudents.has(m.dni)) {
+                uniqueStudents.set(m.dni, {
+                    value: m.dni,
+                    label: `${m.dni} - ${m.apellidos}, ${m.nombres}`,
+                    nombres: m.nombres,
+                    apellidos: m.apellidos
+                });
+            }
+        });
+        // Ordenar por DNI
+        return [...uniqueStudents.values()].sort((a, b) => a.value.localeCompare(b.value));
+    }, [matriculaciones]);
+
+    const materiasCondicionales = [
+        'optativa 1', 'optativa 2', 
+        'ensamble 1', 'ensamble 2', 'ensamble 3', 'ensamble 4'
+    ];
+    
+    // Estado
+    const [commonData, setCommonData] = useState({
+        materiaName: '', // Nombre de la materia
+        obs_optativa_ensamble: '',
+        fecha: new Date().toISOString().split('T')[0],
+        libro_folio: '',
+        condicion: 'Promoción',
+        observaciones: ''
+    });
+    const [showObsField, setShowObsField] = useState(false);
+    const [studentCount, setStudentCount] = useState('');
+    const [planillaRows, setPlanillaRows] = useState([]); // Array de { id, dni, nombres, apellidos, nota }
+    const [loading, setLoading] = useState(false);
+
+    // Manejar cambio en formulario común
+    const handleCommonChange = (e) => {
+        const { name, value } = e.target;
+        setCommonData(prev => ({ ...prev, [name]: value }));
+    };
+
+    // Manejar cambio de materia (para campo condicional)
+    const handleMateriaChange = (e) => {
+        const materiaNombre = e.target.value;
+        setCommonData(prev => ({ ...prev, materiaName: materiaNombre, obs_optativa_ensamble: '' }));
+        
+        if (materiaNombre && materiasCondicionales.includes(materiaNombre.toLowerCase())) {
+            setShowObsField(true);
+        } else {
+            setShowObsField(false);
+        }
+    };
+
+    // Generar las filas
+    const handleGenerateRows = (e) => {
+        e.preventDefault();
+        const count = parseInt(studentCount, 10);
+        if (isNaN(count) || count <= 0) {
+            return showMessage("Ingrese un número válido de estudiantes.", true);
+        }
+        
+        const newRows = Array(count).fill(null).map((_, index) => ({
+            id: index,
+            dni: '',
+            nombres: '',
+            apellidos: '',
+            nota: ''
+        }));
+        setPlanillaRows(newRows);
+    };
+
+    // Manejar cambio en una fila
+    const handleRowChange = (index, field, value) => {
+        const newRows = [...planillaRows];
+        const row = newRows[index];
+        row[field] = value;
+        
+        // Si el campo es DNI, autocompletar
+        if (field === 'dni') {
+            const student = studentOptions.find(s => s.value === value);
+            if (student) {
+                row.nombres = student.nombres;
+                row.apellidos = student.apellidos;
+            } else {
+                row.nombres = '';
+                row.apellidos = '';
+            }
+        }
+        setPlanillaRows(newRows);
+    };
+
+    // (FIX 2) Guardar la planilla con la lógica de planes
+    const handleSavePlanilla = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+
+        const { materiaName, ...commonFields } = commonData;
+
+        if (!materiaName) {
+            setLoading(false);
+            return showMessage("Debe seleccionar una materia.", true);
+        }
+        
+        const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
+        const savePromises = [];
+        let notasGuardadas = 0;
+        let advertencias = [];
+
+        try {
+            for (const row of planillaRows) {
+                if (!row.dni || !row.nota) {
+                    // Omitir filas vacías en lugar de lanzar error
+                    continue; 
+                }
+
+                // 1. Encontrar todos los planes para este DNI en matriculaciones
+                const planesDelEstudiante = [...new Set(
+                    matriculaciones
+                        .filter(m => m.dni === row.dni)
+                        .map(m => m.plan)
+                )];
+
+                if (planesDelEstudiante.length === 0) {
+                    advertencias.push(`DNI ${row.dni} (${row.apellidos}) no tiene planes de matriculación. No se guardó nota.`);
+                    continue;
+                }
+
+                let notaGuardadaParaEsteAlumno = false;
+
+                // 2. Por cada plan, verificar si la materia existe
+                for (const plan of planesDelEstudiante) {
+                    const materiaExisteEnPlan = materias.some(m => m.plan === plan && m.materia === materiaName);
+
+                    // 3. Si existe, registrar la nota para ESE plan
+                    if (materiaExisteEnPlan) {
+                        const notaData = {
+                            ...commonFields, // fecha, libro_folio, condicion, obs, obs_optativa...
+                            materia: materiaName,
+                            dni: row.dni,
+                            apellidos: row.apellidos,
+                            nombres: row.nombres,
+                            nota: row.nota,
+                            plan: plan, // <-- (FIX) Se asigna el plan correcto
+                            timestamp: Timestamp.now()
+                        };
+                        
+                        savePromises.push(addDoc(notasRef, notaData));
+                        notaGuardadaParaEsteAlumno = true;
+                    }
+                } // fin loop planes
+
+                if (notaGuardadaParaEsteAlumno) {
+                    notasGuardadas++;
+                } else {
+                    // Si la materia no existe en NINGUNO de los planes del alumno
+                    advertencias.push(`Materia '${materiaName}' no existe en los planes de ${row.apellidos}. No se guardó nota.`);
+                }
+
+            } // fin loop rows
+
+            // Esperar que todas las notas válidas se guarden
+            await Promise.all(savePromises);
+            
+            if (notasGuardadas > 0) {
+                showMessage(`Planilla procesada. ${notasGuardadas} notas guardadas exitosamente.`, false);
+                // (FIX) Usar showMessage para advertencias en lugar de alert
+                if (advertencias.length > 0) {
+                    setTimeout(() => showMessage(`ADVERTENCIAS: ${advertencias.join('; ')}`, true), 100);
+                }
+                resetForm();
+            } else if (planillaRows.length > 0) {
+                showMessage("Se procesó la planilla, pero no se guardó ninguna nota.", true);
+                if (advertencias.length > 0) {
+                   setTimeout(() => showMessage(`ERRORES: ${advertencias.join('; ')}`, true), 100);
+                }
+            } else {
+                showMessage("No había filas para procesar.", false);
+            }
+
+        } catch (error) {
+            console.error("Error al guardar planilla:", error);
+            showMessage(`Error: ${error.message}`, true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    // Resetear formulario
+    const resetForm = () => {
+        setCommonData({
+            materiaName: '',
+            obs_optativa_ensamble: '',
+            fecha: new Date().toISOString().split('T')[0],
+            libro_folio: '',
+            condicion: 'Promoción',
+            observaciones: ''
+        });
+        setShowObsField(false);
+        setStudentCount('');
+        setPlanillaRows([]);
+        setLoading(false);
+    };
+
+
+    return (
+        <div className="max-w-4xl mx-auto">
+            {/* 1. Formulario de Datos Comunes */}
+            <form onSubmit={handleSavePlanilla} className="p-6 bg-white rounded-lg shadow-md border space-y-4">
+                <h3 className="text-xl font-semibold text-gray-800">Cargar Planilla de Notas</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Materia (Nombres Únicos) */}
+                    <div>
+                        <label htmlFor="materiaName" className="block text-sm font-medium text-gray-700">Materia</label>
+                        <select 
+                            id="materiaName" 
+                            name="materiaName"
+                            value={commonData.materiaName}
+                            onChange={handleMateriaChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            required
+                        >
+                            <option value="">Seleccione materia...</option>
+                            {uniqueMaterias.map(name => (
+                                <option key={name} value={name}>{name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Campo Condicional (Optativa/Ensamble) */}
+                    {showObsField && (
+                        <div>
+                            <label htmlFor="obs_optativa_ensamble" className="block text-sm font-medium text-gray-700">Especifique Optativa/Ensamble</label>
+                            <input 
+                                type="text" 
+                                id="obs_optativa_ensamble"
+                                name="obs_optativa_ensamble"
+                                value={commonData.obs_optativa_ensamble}
+                                onChange={handleCommonChange}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                placeholder="Ej: Ensamble de Rock"
+                                required
+                            />
+                        </div>
+                    )}
+                    
+                    {/* Fecha */}
+                    <div>
+                        <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">Fecha</label>
+                        <input 
+                            type="date" 
+                            id="fecha"
+                            name="fecha"
+                            value={commonData.fecha}
+                            onChange={handleCommonChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            required
+                        />
+                    </div>
+
+                    {/* Condición */}
+                    <div>
+                        <label htmlFor="condicion" className="block text-sm font-medium text-gray-700">Condición</label>
+                        <select 
+                            id="condicion" 
+                            name="condicion"
+                            value={commonData.condicion}
+                            onChange={handleCommonChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            required
+                        >
+                            <option>Promoción</option>
+                            <option>Examen</option>
+                            <option>Equivalencia</option>
+                        </select>
+                    </div>
+
+                    {/* Libro/Folio */}
+                    <div>
+                        <label htmlFor="libro_folio" className="block text-sm font-medium text-gray-700">Libro y Folio</label>
+                        <input 
+                            type="text" 
+                            id="libro_folio"
+                            name="libro_folio"
+                            value={commonData.libro_folio}
+                            onChange={handleCommonChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="Ej: L1 F23"
+                        />
+                    </div>
+                </div>
+                
+                 {/* Observaciones */}
+                <div>
+                    <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700">Observaciones (para toda la planilla)</label>
+                    <textarea 
+                        id="observaciones"
+                        name="observaciones"
+                        rows="2"
+                        value={commonData.observaciones}
+                        onChange={handleCommonChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                        placeholder="Cualquier observación adicional..."
+                    ></textarea>
+                </div>
+
+                <div className="border-t pt-4"></div>
+
+                {/* 2. Generador de Filas */}
+                <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <label htmlFor="studentCount" className="block text-sm font-medium text-gray-700">Número de Estudiantes en Planilla</label>
+                    <div className="mt-1 flex space-x-2">
+                        <input 
+                            type="number" 
+                            id="studentCount"
+                            value={studentCount}
+                            onChange={(e) => setStudentCount(e.target.value)}
+                            className="w-48 rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="Ej: 10"
+                        />
+                        <button 
+                            type="button" 
+                            onClick={handleGenerateRows}
+                            className="font-medium py-3 px-5 rounded-lg shadow-md transition duration-200 bg-indigo-500 hover:bg-indigo-600 text-white"
+                        >
+                            Generar Filas
+                        </button>
+                    </div>
+                </div>
+
+                {/* 3. Tabla de Planilla (Dinámica) */}
+                {planillaRows.length > 0 && (
+                    <div className="mt-6">
+                        <h4 className="text-lg font-semibold text-gray-800 mb-3">Estudiantes a Calificar</h4>
+                        <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">DNI (Matriculados)</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Apellidos</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Nombres</th>
+                                        <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">Calificación *</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {planillaRows.map((row, index) => (
+                                        <tr key={row.id}>
+                                            {/* DNI (Desplegable) */}
+                                            <td className="px-2 py-1">
+                                                <select 
+                                                    value={row.dni}
+                                                    onChange={(e) => handleRowChange(index, 'dni', e.target.value)}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
+                                                >
+                                                    <option value="">Seleccione DNI...</option>
+                                                    {studentOptions.map(s => (
+                                                        <option key={s.value} value={s.value}>{s.label}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                            {/* Apellidos (Auto) */}
+                                            <td className="px-2 py-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.apellidos} 
+                                                    className="w-full rounded-md p-2 bg-gray-100 border-gray-200"
+                                                    readOnly 
+                                                />
+                                            </td>
+                                            {/* Nombres (Auto) */}
+                                            <td className="px-2 py-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.nombres} 
+                                                    className="w-full rounded-md p-2 bg-gray-100 border-gray-200"
+                                                    readOnly 
+                                                />
+                                            </td>
+                                            {/* Nota (Editable) */}
+                                            <td className="px-2 py-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.nota}
+                                                    onChange={(e) => handleRowChange(index, 'nota', e.target.value)}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
+                                                    placeholder="Ej: 9"
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {/* 4. Botón de Guardar Planilla */}
+                        <div className="border-t pt-6 mt-6">
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
+                            >
+                                {loading ? <IconLoading /> : `Guardar Planilla`}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </form>
+        </div>
+    );
+};
+
+>>>>>>> parent of 19d291b (cargar analitico)
 
 
 /**
