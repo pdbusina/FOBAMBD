@@ -27,13 +27,13 @@ import {
 // (Usando la configuración que pegaste)
 // ---
 const firebaseConfig = {
-  apiKey: "AIzaSyCa2dV62oyHuEg6Lpc7FqPSz5kV_5WwfQo",
-  authDomain: "fobamedusis.firebaseapp.com",
-  projectId: "fobamedusis",
-  storageBucket: "fobamedusis.firebasestorage.app",
-  messagingSenderId: "135083630873",
-  appId: "1:135083630873:web:19a8a721d28801c6bba588",
-  measurementId: "G-37D5884XKK"
+ apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 // --- Fin de la Configuración Manual ---
 
