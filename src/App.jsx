@@ -38,29 +38,51 @@ const firebaseConfig = {
 // --- Fin de la Configuración Manual ---
 
 // --- Estilos de Impresión (Para Analítico) ---
+// --- (NUEVO) Estilos de Impresión (Combinados y Corregidos) ---
 const printStyles = `
   @media print {
+    /* --- Regla Global: Ocultar todo por defecto --- */
     body * {
       visibility: hidden;
-      -webkit-print-color-adjust: exact !importanT;
+      -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    #analitico-print-area, #analitico-print-area * {
+
+    /* --- Reglas para MOSTRAR el área de impresión (para ambos) --- */
+    .print-area, .print-area * {
       visibility: visible;
     }
-    #analitico-print-area {
+
+    .print-area {
       position: absolute;
       left: 0;
       top: 0;
       width: 100%;
       height: 100%;
-      padding: 20mm 15mm; /* Márgenes de A4 */
-      font-size: 10pt;
+      margin: 0;
+      padding: 0;
     }
+
+    /* --- Ocultar la UI --- */
     .no-print {
       display: none !important;
     }
-    /* ... (resto de estilos del analítico) ... */
+
+    /* --- Estilos específicos del ANALÍTICO (A4) --- */
+    body.printing-analitico {
+      /* Define el tamaño A4 solo cuando se imprime el analítico */
+      @page {
+        size: A4 portrait;
+        margin: 20mm 15mm;
+      }
+    }
+    
+    #analitico-print-area {
+      /* Los márgenes se definen en @page */
+      font-size: 10pt;
+    }
+    
+    /* Reglas de la tabla del analítico */
     table { width: 100%; border-collapse: collapse; }
     th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
     th { background-color: #eee !important; }
@@ -70,29 +92,19 @@ const printStyles = `
     .print-header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; text-align: left; }
     .print-signatures { padding-top: 60px; text-align: center; }
     .print-signature-line { border-top: 1px solid #000; padding-top: 4px; margin: 0 30px; }
-  }
-`;
 
-// --- (NUEVO) Estilos de Impresión (Para Certificado) ---
-const printStylesCertificate = `
-  @media print {
-    #certificate-print-area, #certificate-print-area * {
-      visibility: visible;
+    
+    /* --- Estilos específicos del CERTIFICADO (A5) --- */
+    body.printing-certificado {
+      /* Define el tamaño A5 solo cuando se imprime el certificado */
+      @page {
+        size: A5 portrait;
+        /* (AJUSTE) Márgenes reducidos para que sea más ancho */
+        margin: 15mm; 
+      }
     }
-    #certificate-print-area {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      padding: 0;
-      margin: 0;
-    }
-    /* (NUEVO) Define el tamaño A5 (mitad A4 vertical) */
-    @page {
-      size: A5;
-      margin: 20mm; 
-    }
+
+    /* Estilos de la tipografía del certificado */
     .certificate-content {
       width: 100%;
       height: 100%; 
@@ -522,7 +534,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* (AJUSTADO) Estilos de impresión globales */}
-      <style>{printStyles}{printStylesCertificate}</style>
+      <style>{printStyles}</style>
       
       {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
       
@@ -553,17 +565,11 @@ export default function App() {
                 matriculaciones={matriculaciones}
             />
         }
-        {/* (NUEVO) Pantalla de Analítico de Estudiante */}
-        {appState === 'student_analitico' && 
-            <StudentAnaliticoScreen 
-                navigateTo={navigateTo}
-                showMessage={showMessage}
-                students={students}
-                matriculaciones={matriculaciones}
-                materias={materias}
-                notas={notas}
-            />
-        }
+        
+        {/* (MOVIDO) La pantalla 'student_analitico' se movió fuera de este div 'no-print' 
+          para permitir que la impresión funcione.
+        */}
+        
         {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
       </div>
       
@@ -591,6 +597,21 @@ export default function App() {
           snapshotToArray={snapshotToArray}
         />
       )}
+
+      {/* --- (NUEVA UBICACIÓN) --- */}
+      {/* El Analítico de Estudiante se renderiza aquí (fuera de 'no-print') */}
+      {appState === 'student_analitico' && 
+          <StudentAnaliticoScreen 
+              navigateTo={navigateTo}
+              showMessage={showMessage}
+              students={students}
+              matriculaciones={matriculaciones}
+              materias={materias}
+              notas={notas}
+          />
+      }
+      {/* --- FIN DE LA NUEVA UBICACIÓN --- */}
+
     </div>
   );
 }
@@ -606,6 +627,11 @@ export default function App() {
 const LandingScreen = ({ navigateTo }) => (
   <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-100">
     <header className="text-center mb-12">
+      
+      {/* --- NUEVO --- */}
+      <img src="/logo.png" alt="Logo Escuela" className="w-24 h-auto mx-auto mb-4" />
+      {/* --- FIN NUEVO --- */}
+
       <h1 className="text-5xl font-bold text-gray-800 tracking-tight">Sistema de Gestión Estudiantil</h1>
       <h2 className="text-3xl font-semibold text-indigo-600 mt-2">FOBAM</h2>
       <p className="text-xl text-gray-600 mt-4">Escuela Superior de Música de Neuquén</p>
@@ -805,13 +831,22 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
 const CertificateDisplay = ({ student, plan, onCancel }) => {
             
     const handlePrint = () => {
-        // Copiar el contenido de la vista previa al div de impresión
+        // (CORREGIDO) Apuntar a los IDs correctos del Certificado
         const printArea = document.getElementById('certificate-print-area');
         const previewContent = document.getElementById('certificate-preview-content');
+        
         if (printArea && previewContent) {
+            // (NUEVO) Añadir clase al body para activar los estilos A5
+            document.body.classList.add('printing-certificado');
+            
             printArea.innerHTML = previewContent.innerHTML;
             window.print();
             printArea.innerHTML = ''; // Limpiar
+            
+            // (NUEVO) Quitar clase del body después de imprimir
+            document.body.classList.remove('printing-certificado');
+        } else {
+            console.error("Error al preparar la impresión del certificado.");
         }
     };
     
@@ -832,14 +867,39 @@ const CertificateDisplay = ({ student, plan, onCancel }) => {
                 background: 'white',
                 color: 'black'
             }}>
-                <div className="certificate-header" style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14pt', marginBottom: '30px' }}>
-                    <p>Escuela Superior de Música de Neuquén</p>
+                <div 
+                    className="certificate-header" 
+                    style={{ 
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontWeight: 'bold', 
+                        fontSize: '14pt', 
+                        marginBottom: '30px',
+                        paddingBottom: '10px',
+                        borderBottom: '2px solid #000' // Opcional: añade un borde como el analítico
+                    }}
+                >
+                    {/* Izquierda (Texto) */}
+                    <div style={{ textAlign: 'left' }}>
+                        <p style={{ margin: 0 }}>Escuela Superior de Música de Neuquén</p>
+                        <p style={{ margin: 0, fontSize: '12pt', fontWeight: 'normal' }}>Consejo Provincial de Educación</p>
+                    </div>
+                    
+                    {/* Derecha (Logo) */}
+                    <div>
+                        <img 
+                            src="/logo.png" 
+                            alt="Logo" 
+                            style={{ width: '80px', height: 'auto' }}
+                        />
+                    </div>
                 </div>
                 <div className="certificate-body" style={{ marginTop: '30px', marginBottom: '40px' }}>
                     <p>La Escuela Superior de Música de Neuquén certifica que
                         el/la estudiante <strong>{student.nombres} {student.apellidos}</strong>,
                         DNI <strong>{student.dni}</strong>, es {alumnoTerm} regular
-                        del plan <strong>{plan}</strong>.
+                        del plan <strong>{plan}</strong>, de la FORMACIÓN BÁSICA EN MÚSICA.
                     </p>
                 </div>
                 <div className="certificate-footer" style={{ marginBottom: '40px' }}>
@@ -891,15 +951,20 @@ const StudentAnaliticoScreen = ({
 }) => {
     return (
         <div className="flex flex-col items-center min-h-screen p-8 bg-gray-100">
-            <header className="text-center mb-10">
+            
+            {/* Este div es correcto, lo necesita el botón de imprimir */}
+            <div id="analitico-print-area" className="print-area"></div>
+
+            {/* SÓLO este header debe ser 'no-print' */}
+            <header className="text-center mb-10 no-print">
               <h1 className="text-4xl font-bold text-gray-800">Portal Estudiante</h1>
               <p className="text-lg text-gray-600 mt-2">Consulta de Rendimiento Académico</p>
             </header>
     
+            {/* MODIFICADO: Quitamos 'no-print' de aquí */}
             <main className="w-full max-w-7xl p-8 bg-white rounded-xl shadow-lg border border-gray-200">
-                {/* Reutilizamos el componente AnaliticoTab de Admin */}
-                {/* Pasamos 'null' a props que no usamos aquí (db, appId, etc.) 
-                 ya que AnaliticoTab ahora solo depende de las listas (props).
+                {/* Este 'main' CONTIENE el analítico.
+                  Si lo ocultamos, la función de imprimir no tiene nada que copiar.
                 */}
                 <AnaliticoTab
                     db={null}
@@ -913,9 +978,10 @@ const StudentAnaliticoScreen = ({
                 />
             </main>
             
+            {/* SÓLO este botón debe ser 'no-print' */}
             <button
               onClick={() => navigateTo('student_access')}
-              className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
+              className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150 no-print"
             >
               &larr; Volver al Portal Estudiante
             </button>
@@ -1327,14 +1393,21 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
 
     // 2. Función de Impresión
     const handlePrint = () => {
-        // Copiar el contenido de la vista previa al div de impresión
         const printArea = document.getElementById('analitico-print-area');
         const previewContent = document.getElementById('analitico-preview-content');
+        
         if (printArea && previewContent) {
+            // (NUEVO) Añadir clase al body para activar los estilos A4
+            document.body.classList.add('printing-analitico');
+            
             printArea.innerHTML = previewContent.innerHTML;
             window.print();
+            printArea.innerHTML = ''; // Limpiar
+            
+            // (NUEVO) Quitar clase del body después de imprimir
+            document.body.classList.remove('printing-analitico');
         } else {
-            alert("Error al preparar la impresión.");
+            console.error("Error al preparar la impresión del analítico.");
         }
     };
     
@@ -1354,18 +1427,36 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
     return (
         <div className="bg-white p-8 rounded-lg shadow-lg border">
             {/* Contenedor de VISTA PREVIA. */}
-            <div id="analitico-preview-content" className="max-w-4xl mx-auto bg-white text-black">
+           <div id="analitico-preview-content" className="max-w-4xl mx-auto bg-white text-black">
                 
                 {/* 1. Encabezado (AJUSTADO) */}
-                <div className="print-header text-left text-sm">
-                    {/* (AJUSTE) Sin Logo */}
+                <div className="print-header text-left text-sm border-b-2 border-black pb-4">
                     
-                    {/* (AJUSTE) Texto del Encabezado (Alineado Izquierda) */}
-                    <div>
-                        <h2 className="text-xl font-bold">Escuela Superior de Música de Neuquén</h2>
-                        <h3 className="text-lg font-semibold">Formación Básica en Música (FOBAM)</h3>
-                        <h3 className="text-lg font-semibold mt-2">CERTIFICADO DE RENDIMIENTO ACADÉMICO (ANALÍTICO)</h3>
-                        <p className="mt-2">Plan de Estudio: <strong>{plan}</strong></p>
+                    {/* --- BLOQUE FLEX (LOGO Y NOMBRE) --- */}
+                    <div className="flex justify-between items-center">
+                        {/* Izquierda (Texto) */}
+                        <div>
+                            {/* CAMBIO: Tamaño de fuente ajustado a text-lg */}
+                            <h2 className="text-xl font-bold">Escuela Superior de Música de Neuquén</h2>
+                            <h3 className="text-lg font-semibold">Consejo Provincial de Educación</h3>
+                            <h3 className="text-lg font-semibold">Formación Básica en Música (FOBAM)</h3>
+                            <p className="mt-3">Plan de Estudio: <strong>{plan}</strong></p>
+                        </div>
+                        {/* Derecha (Logo) */}
+                        <div>
+                            <img src="/logo.png" alt="Logo" className="w-40 h-auto" /> 
+                        </div>
+                    </div>
+                    {/* --- FIN BLOQUE FLEX --- */}
+
+                    {/* CAMBIO: Se eliminó 'mt-4' para juntar los bloques de texto */}
+                    <div className=""> 
+                        
+                        
+                        {/* CAMBIO: Se añadió 'text-center' y se mantuvo el margen superior */}
+                        <h3 className="text-2xl font-semibold mt-10 text-center">CERTIFICADO DE RENDIMIENTO ACADÉMICO (ANALÍTICO)</h3>
+                        
+                        
                     </div>
                 </div>
                 
@@ -1515,76 +1606,6 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
             </div>
         </div>
     );
-};
-
-
-/**
- * Pestaña 4: Gestión de Notas (Contenedor Principal)
- */
-const NotasTab = ({ 
-    db, appId, showMessage, materias, students, matriculaciones, notas, 
-    notasSubTab, setNotasSubTab, snapshotToArray
-}) => {
-  return (
-    <div id="gestion_notas">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Gestión de Notas</h2>
-      
-      {/* Sub-navegación para Notas */}
-      <div className="flex mb-6 border-b border-gray-300">
-        <TabButton 
-          id="ingresar_nota" 
-          label="Ingresar Nota" 
-          isActive={notasSubTab === 'ingresar_nota'} 
-          onClick={setNotasSubTab}
-        />
-        <TabButton 
-          id="ingresar_planilla" 
-          label="Ingresar Planilla" 
-          isActive={notasSubTab === 'ingresar_planilla'} 
-          onClick={setNotasSubTab}
-        />
-        <TabButton 
-          id="ingresar_analitico" 
-          label="Ingresar Analítico" 
-          isActive={notasSubTab === 'ingresar_analitico'} 
-          onClick={setNotasSubTab}
-        />
-      </div>
-
-      {/* Contenido de la Sub-Pestaña */}
-      {notasSubTab === 'ingresar_nota' && (
-        <IngresarNotaIndividual
-            db={db}
-            appId={appId}
-            showMessage={showMessage}
-            materias={materias}
-            matriculaciones={matriculaciones} 
-            snapshotToArray={snapshotToArray} 
-        />
-      )}
-      {notasSubTab === 'ingresar_planilla' && (
-        <IngresarPlanilla
-            db={db}
-            appId={appId}
-            showMessage={showMessage}
-            materias={materias}
-            students={students}
-            matriculaciones={matriculaciones} 
-        />
-      )}
-      {notasSubTab === 'ingresar_analitico' && (
-        <IngresarAnalitico
-           db={db}
-           appId={appId}
-           showMessage={showMessage}
-           materias={materias}
-           students={students}
-           matriculaciones={matriculaciones}
-           notas={notas}               // <-- pasar las notas para precarga/actualización
-        />
-      )}
-    </div>
-  );
 };
 
 /**
