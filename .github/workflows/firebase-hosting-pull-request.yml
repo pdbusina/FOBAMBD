@@ -14,23 +14,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- PASOS NUEVOS ---
-      # 1. Configura el entorno de Node.js
+      # 1. Configura Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # 2. Instala todas las dependencias (incluyendo 'vite')
+      # 2. Instala dependencias
       - name: Install Dependencies
         run: npm install
-      # --- FIN PASOS NUEVOS ---
 
-      # 3. Ahora este paso (que antes fallaba) funcionará
+      # 3. Construye el proyecto (¡CON LAS CLAVES!)
       - name: Build Project
         run: npm run build
+        # --- ¡ESTE ES EL BLOQUE NUEVO Y CRUCIAL! ---
+        # Pasa los secretos de GitHub al entorno de Vite
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+        # --- FIN DEL BLOQUE NUEVO ---
 
-      # 4. Y este paso despliega la vista previa
+      # 4. Despliega la vista previa
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
