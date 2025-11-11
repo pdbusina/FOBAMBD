@@ -11,7 +11,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: npm run build
+
+      # --- PASOS NUEVOS ---
+      # 1. Configura el entorno de Node.js para que el servidor lo entienda
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # (Usamos una versión moderna de Node)
+
+      # 2. Instala todas las dependencias (incluyendo 'vite', que faltaba)
+      - name: Install Dependencies
+        run: npm install
+
+      # --- FIN PASOS NUEVOS ---
+
+      # 3. Ahora este paso (que antes fallaba) funcionará
+      - name: Build Project
+        run: npm run build
+
+      # 4. Y este paso despliega el 'build' a Firebase
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
