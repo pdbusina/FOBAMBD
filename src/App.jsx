@@ -3,7 +3,8 @@ import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
     signInAnonymously, 
-    onAuthStateChanged 
+    onAuthStateChanged,
+    signInWithEmailAndPassword
 } from 'firebase/auth';
 import { 
     getFirestore, 
@@ -232,6 +233,7 @@ export default function App() {
   const [notasSubTab, setNotasSubTab] = useState('ingresar_nota'); // Para sub-pestañas de notas
   const [message, setMessage] = useState({ text: "", isError: false });
   const [debugInfo, setDebugInfo] = useState({ projectId: null, authStatus: "Idle" });
+  const [userClaims, setUserClaims] = useState(null);
   
   // App ID (calculado desde la config)
   const appId = useMemo(() => firebaseConfig.projectId || "default-app-id", [firebaseConfig]);
@@ -254,27 +256,52 @@ export default function App() {
       setDebugInfo(prev => ({ ...prev, projectId: app.options.projectId }));
 
       // Listener de Autenticación
-      const unsubscribeAuth = onAuthStateChanged(userAuth, (user) => {
-        if (user) {
-          // Usuario (anónimo) autenticado
-          setUserId(user.uid);
-          setLoading(false);
-          setDebugInfo(prev => ({ ...prev, authStatus: `Autenticado (UID: ${user.uid})` }));
-        } else {
-          // No hay usuario, intentar autenticación anónima
-          setDebugInfo(prev => ({ ...prev, authStatus: "Autenticando (Anónimo)..." }));
-          signInAnonymously(userAuth).catch((error) => {
-            console.error("Error en signInAnonymously:", error);
-            if (error.code === 'auth/configuration-not-found') {
-                setMessage({ text: "Error: 'Inicio de sesión Anónimo' no está habilitado en Firebase.", isError: true });
-                setDebugInfo(prev => ({ ...prev, authStatus: "Error: Auth Anónimo deshabilitado." }));
-            } else {
-                setMessage({ text: `Error de autenticación: ${error.message}`, isError: true });
-                setDebugInfo(prev => ({ ...prev, authStatus: `Error: ${error.code}` }));
-            }
-          });
+    const unsubscribeAuth = onAuthStateChanged(userAuth, async (user) => { // <-- 1. Añadido 'async'
+      if (user) {
+        // Usuario autenticado
+        setUserId(user.uid);
+
+        // --- (NUEVO) Obtener "claims" (credenciales) del token ---
+        try {
+          // 1. Pedir el token y sus claims
+          const idTokenResult = await user.getIdTokenResult();
+          const claims = idTokenResult.claims;
+          
+          // 2. Guardar los claims en el estado de React (asume que ya creaste el estado 'userClaims')
+          setUserClaims(claims); 
+
+          // 3. Actualizar el debugInfo con el rol (si existe)
+          const authType = user.isAnonymous ? "Anónimo" : "Email/Pass";
+          // (Por ahora 'role' saldrá vacío, pero leerá 'super_admin' en el futuro)
+          const role = claims.super_admin ? "SuperAdmin" : (claims.admin ? "Admin" : (user.isAnonymous ? "Anónimo" : "Usuario"));
+          setDebugInfo(prev => ({ ...prev, authStatus: `Autenticado (${authType} - Rol: ${role})` }));
+
+        } catch (error) {
+          console.error("Error al obtener claims:", error);
+          setDebugInfo(prev => ({ ...prev, authStatus: "Error obteniendo claims" }));
         }
-      });
+        // --- Fin del bloque nuevo ---
+
+        setLoading(false); // Indicar que la app ya puede mostrarse
+
+      } else {
+        // No hay usuario (sesión cerrada), intentar autenticación anónima
+        setDebugInfo(prev => ({ ...prev, authStatus: "Autenticando (Anónimo)..." }));
+        
+        setUserClaims(null); // <-- (NUEVO) Limpiar los claims al cerrar sesión
+
+        signInAnonymously(userAuth).catch((error) => {
+          console.error("Error en signInAnonymously:", error);
+          if (error.code === 'auth/configuration-not-found') {
+              setMessage({ text: "Error: 'Inicio de sesión Anónimo' no está habilitado en Firebase.", isError: true });
+              setDebugInfo(prev => ({ ...prev, authStatus: "Error: Auth Anónimo deshabilitado." }));
+          } else {
+              setMessage({ text: `Error de autenticación: ${error.message}`, isError: true });
+              setDebugInfo(prev => ({ ...prev, authStatus: `Error: ${error.code}` }));
+          }
+        });
+      }
+    });
       
       return () => unsubscribeAuth();
 
@@ -576,6 +603,7 @@ export default function App() {
       {/* El Dashboard se maneja fuera del 'no-print' principal para que el analítico pueda imprimirse */}
       {appState === 'admin_dashboard' && (
         <AdminDashboardScreen
+          userClaims={userClaims}
           navigateTo={navigateTo}
           activeTab={activeTab}
           handleTabChange={handleTabChange}
@@ -637,12 +665,14 @@ const LandingScreen = ({ navigateTo }) => (
       <p className="text-xl text-gray-600 mt-4">Escuela Superior de Música de Neuquén</p>
     </header>
     <main className="w-full max-w-2xl space-y-8">
+      {/*}
       <AccessButton
         icon={<IconUser />}
         title="Estudiante"
         description="Consultar certificados y rendimiento académico."
         onClick={() => navigateTo('student_access')}
       />
+        */}
       <AccessButton
         icon={<IconAdmin />}
         title="Administrativo"
@@ -992,38 +1022,79 @@ const StudentAnaliticoScreen = ({
 
 /**
  * Pantalla 3: Login Administrativo
+ * (MODIFICADO PARA EMAIL/CONTRASEÑA)
  */
 const AdminLoginScreen = ({ navigateTo, showMessage }) => {
-    
-    // El login ahora es directo, sin contraseña
-    const handleLogin = (e) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleLogin = async (e) => {
         e.preventDefault();
-        showMessage("Acceso autorizado.", false);
-        navigateTo('admin_dashboard');
+        setLoading(true);
+
+        try {
+            const auth = getAuth();
+            // (NUEVO) Intentar iniciar sesión con Email y Contraseña
+            await signInWithEmailAndPassword(auth, email, password);
+
+            // Si llegamos aquí, el login fue exitoso
+            showMessage("Acceso autorizado.", false);
+            navigateTo('admin_dashboard');
+
+        } catch (error) {
+            console.error("Error en inicio de sesión:", error);
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                showMessage("Error: Email o contraseña incorrectos.", true);
+            } else {
+                showMessage(`Error: ${error.message}`, true);
+            }
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
       <div className="flex items-center justify-center min-h-screen p-8 bg-gray-100">
         <main className="w-full max-w-md p-10 bg-white rounded-xl shadow-2xl border border-gray-200">
             <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Acceso Administrativo</h1>
+
+            {/* --- FORMULARIO MODIFICADO --- */}
             <form onSubmit={handleLogin} className="space-y-6">
                 <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña de Acceso</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                    <input 
+                        type="email" 
+                        id="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                        placeholder="tu.email@ejemplo.com"
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
                     <input 
                         type="password" 
                         id="password"
-                        placeholder="(Acceso directo habilitado)"
-                        disabled={true}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border bg-gray-100 cursor-not-allowed"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                        placeholder="••••••••"
+                        required
                     />
                 </div>
                 <button 
                     type="submit" 
-                    className="w-full font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    disabled={loading}
+                    className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                 >
-                    Ingresar
+                    {loading ? <IconLoading /> : 'Ingresar'}
                 </button>
             </form>
+            {/* --- FIN FORMULARIO MODIFICADO --- */}
+
              <button
               onClick={() => navigateTo('landing')}
               className="mt-8 text-center w-full text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
@@ -1039,6 +1110,7 @@ const AdminLoginScreen = ({ navigateTo, showMessage }) => {
  * Pantalla 4: Dashboard Administrativo
  */
 const AdminDashboardScreen = ({ 
+    userClaims,
     navigateTo, activeTab, handleTabChange, showMessage,
     db, userId, appId, students, instrumentos, matriculaciones, materias, notas, // (NUEVO) notas
     addStudent, updateStudent, deleteStudent, deleteMateria, // (NUEVO) Recibir deleteMateria
@@ -1058,11 +1130,16 @@ const AdminDashboardScreen = ({
                     <span className="font-semibold text-xl text-gray-700 ml-2">Admin</span>
                 </div>
                 <button 
-                    onClick={() => navigateTo('landing')}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                >
-                    Cerrar Sesión &rarr;
-                </button>
+                onClick={() => {
+                    const auth = getAuth();
+                    auth.signOut(); // <-- (NUEVO) Cierra la sesión de Firebase
+                    // El 'onAuthStateChanged' se disparará solo y nos llevará al login anónimo
+                    navigateTo('landing'); // Volver a la pantalla de inicio
+                }}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+            >
+                Cerrar Sesión &rarr;
+            </button>
             </div>
         </div>
         
@@ -1099,23 +1176,37 @@ const AdminDashboardScreen = ({
                onClick={handleTabChange}
              />
              <TabButton 
+               id="certificado" 
+               label="6.Certificado" 
+               isActive={activeTab === 'certificado'} 
+               onClick={handleTabChange}
+             />
+            {/* --- (NUEVO) BLOQUE CONDICIONAL PARA SUPERADMIN --- */}
+            {/* Estas pestañas solo se mostrarán si userClaims.super_admin es 'true' */}
+            {userClaims?.super_admin && (
+            <>
+             <TabButton 
                id="instrumentos" 
-               label="6. Admin Instrumentos" 
+               label="7. Admin Instrumentos" 
                isActive={activeTab === 'instrumentos'} 
                onClick={handleTabChange}
              />
              <TabButton 
                id="materias" 
-               label="7. Admin Materias" 
+               label="8. Admin Materias" 
                isActive={activeTab === 'materias'} 
                onClick={handleTabChange}
              />
              <TabButton 
                 id="carga_masiva" 
-                label="8. Carga Masiva" 
+                label="9. Carga Masiva" 
                 isActive={activeTab === 'carga_masiva'} 
                 onClick={handleTabChange}
                 />
+                </>
+            )}
+            {/* --- FIN DEL BLOQUE CONDICIONAL --- */}
+            
         </nav>
       </header>
       
@@ -1173,6 +1264,13 @@ const AdminDashboardScreen = ({
                 notas={notas}
                 snapshotToArray={snapshotToArray}
              />
+          )}
+          {activeTab === 'certificado' && (
+            <CertificadoTab 
+                showMessage={showMessage}
+                students={students}
+                matriculaciones={matriculaciones}
+            />
           )}
           {activeTab === 'instrumentos' && (
             <InstrumentosTab 
@@ -1352,29 +1450,62 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
 
     // 1. (LÓGICA ACTUALIZADA) Procesamiento de notas
     const processedData = useMemo(() => {
-        // 1. Get all subjects for the selected plan
+        // --- PASO 1: Obtener materias del plan seleccionado ---
         const materiasDelPlan = allMaterias.filter(m => m.plan === plan);
 
-        // 2. Find notes for this student (approved only)
+        // --- PASO 2: Obtener TODAS las notas aprobadas del alumno ---
         const notasAprobadas = allNotas.filter(n => 
             n.dni === student.dni && 
-            n.plan === plan &&
             ['Promoción', 'Examen', 'Equivalencia'].includes(n.condicion)
         );
 
-        // 3. Map subjects and find their note
-        const materiasConNotas = materiasDelPlan.map(materia => {
-            // Find the note for this specific subject (materia.materia)
-            // (Lógica simplificada: buscar por nombre de materia)
+        // --- PASO 3: Mapear materias con sus notas (si existen) ---
+        let materiasConNotas = materiasDelPlan.map(materia => {
+            // Buscar por nombre de materia en todas las notas aprobadas
             const notaEncontrada = notasAprobadas.find(n => n.materia === materia.materia);
 
             return {
                 ...materia, // id, materia (name), plan, anio
-                notaData: notaEncontrada || null // The full note object, or null
+                notaData: notaEncontrada || null // El objeto de la nota, o null
             };
         });
 
-        // 4. Group by year
+        // --- (NUEVO Y CORREGIDO) PASO 4: Lógica de Exclusión (EC vs DF) ---
+        
+        // (CAMBIO) Nombres en minúscula para comparación robusta
+        const EC_NAME = "expresión corporal";
+        const DF_NAME = "danzas folklóricas";
+
+        // Función auxiliar para buscar de forma robusta
+        const findMateriaAprobada = (nombreMateria) => {
+            return materiasConNotas.find(m => 
+                String(m.anio) === '1' && // (CAMBIO) String(m.anio) compara '1' y 1
+                m.materia.toLowerCase() === nombreMateria && // (CAMBIO) .toLowerCase()
+                m.notaData != null // Tiene nota
+            );
+        };
+
+        const ecAprobada = findMateriaAprobada(EC_NAME);
+        const dfAprobada = findMateriaAprobada(DF_NAME);
+
+        // Aplicar el filtro de exclusión
+        if (ecAprobada) {
+            // Si EC tiene nota, filtramos (sacamos) a DF (solo de Año 1)
+            materiasConNotas = materiasConNotas.filter(m => 
+                !(String(m.anio) === '1' && m.materia.toLowerCase() === DF_NAME)
+            );
+        } else if (dfAprobada) {
+            // Si DF tiene nota, filtramos (sacamos) a EC (solo de Año 1)
+            materiasConNotas = materiasConNotas.filter(m => 
+                !(String(m.anio) === '1' && m.materia.toLowerCase() === EC_NAME)
+            );
+        }
+        // Si ninguna tiene nota, ambas se muestran (vacías)
+
+        // --- FIN DEL PASO 4 ---
+
+
+        // --- PASO 5: Agrupar por año (usa la lista ya filtrada) ---
         const grouped = materiasConNotas.reduce((acc, materia) => {
             const anio = materia.anio;
             if (!acc[anio]) {
@@ -1384,7 +1515,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
             return acc;
         }, {});
         
-        // 5. Sort subjects within each year
+        // --- PASO 6: Ordenar materias dentro de cada año ---
         Object.keys(grouped).forEach(anio => {
            grouped[anio].sort((a,b) => a.materia.localeCompare(b.materia));
         });
@@ -3315,7 +3446,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
 
 
 /**
- * Pestaña 5: Admin Instrumentos
+ * Pestaña 7: Admin Instrumentos
  */
 const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
     const [instrumento, setInstrumento] = useState('');
@@ -3459,7 +3590,7 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
 };
 
 /**
- * Pestaña 6: Admin Materias
+ * Pestaña 8: Admin Materias
  */
 const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { // (NUEVO) Recibir deleteMateria
     const [materia, setMateria] = useState('');
@@ -3625,7 +3756,7 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
 };
 
 /**
- * (NUEVO) Pestaña 8: Carga Masiva de Datos
+ * (NUEVO) Pestaña 9: Carga Masiva de Datos
  */
 const CargaMasivaTab = ({ db, appId, showMessage }) => {
     const [jsonData, setJsonData] = useState('');
@@ -3724,6 +3855,158 @@ const CargaMasivaTab = ({ db, appId, showMessage }) => {
                 </div>
             </form>
         </div>
+    );
+};
+
+/**
+ * (NUEVO) Pestaña 6: Generar Certificado de Alumno Regular
+ * (Lógica adaptada de StudentAccessScreen)
+ */
+const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
+    const [step, setStep] = useState(1); // 1: DNI, 2: Plan Select, 3: Certificate
+    const [dni, setDni] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [studentInfo, setStudentInfo] = useState(null); // { dni, nombres, apellidos, genero }
+    const [foundPlans, setFoundPlans] = useState([]); // [plan1, plan2]
+    const [selectedPlan, setSelectedPlan] = useState('');
+    
+    // --- (CAMBIO) Definir 'currentYear' aquí ---
+    // Así, tanto 'handleDniSearch' como el 'return' (JSX) pueden usarlo.
+    const currentYear = new Date().getFullYear().toString();
+    
+    // Función para buscar DNI (basada en la lista de matriculaciones)
+    const handleDniSearch = async (e) => {
+        e.preventDefault();
+        if (!dni) return showMessage("Por favor, ingrese un DNI.", true);
+
+        setIsLoading(true);
+        // 'currentYear' ya está definido arriba
+
+        try {
+            // 1. Buscar Matriculaciones (usando la lista global)
+            const matriculasDelDNI = matriculaciones.filter(m => 
+                m.dni === dni && 
+                m.cicloLectivo === currentYear
+            );
+
+            if (matriculasDelDNI.length === 0) {
+                setIsLoading(false);
+                return showMessage(`No se encontró matrícula activa para el DNI ${dni} en el ciclo ${currentYear}.`, true);
+            }
+
+            // 2. Buscar Info del Estudiante (usando la lista global)
+            const studentData = students.find(s => s.dni === dni);
+            
+            const firstMatricula = matriculasDelDNI[0];
+            
+            setStudentInfo({
+                dni: firstMatricula.dni,
+                nombres: firstMatricula.nombres,
+                apellidos: firstMatricula.apellidos,
+                genero: studentData ? studentData.genero : 'Otro' // Obtener género
+            });
+
+            // 3. Procesar planes
+            const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
+            
+            if (planesUnicos.length > 1) {
+                setFoundPlans(planesUnicos);
+                setStep(2); // Ir a selección de plan
+            } else {
+                setSelectedPlan(planesUnicos[0]);
+                setStep(3); // Ir directo al certificado
+            }
+            
+        } catch (error) {
+            console.error("Error buscando matrícula:", error);
+            showMessage(`Error al consultar los datos: ${error.message}`, true);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    // Manejar selección de plan
+    const handlePlanSelect = (plan) => {
+        setSelectedPlan(plan);
+        setStep(3);
+    };
+
+    // Resetear el flujo
+    const resetFlow = () => {
+        setStep(1);
+        setDni('');
+        setStudentInfo(null);
+        setFoundPlans([]);
+        setSelectedPlan('');
+    };
+    
+    return (
+      <div id="generar_certificado">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-6">Generar Certificado de Alumno Regular</h2>
+        
+        <main className="w-full max-w-2xl p-8 bg-white rounded-xl shadow-lg border border-gray-200 mx-auto">
+            
+            {/* Paso 1: Pedir DNI */}
+            {step === 1 && (
+                <div>
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Buscar Estudiante Matriculado</h2>
+                    <form onSubmit={handleDniSearch} className="space-y-4">
+                        <div>
+                            {/* (CAMBIO) Esta línea ahora funciona */}
+                            <label htmlFor="dni_student_admin" className="block text-sm font-medium text-gray-700">Ingrese DNI (Ciclo {currentYear})</label>
+                            <input 
+                                type="text" 
+                                id="dni_student_admin"
+                                value={dni}
+                                onChange={(e) => setDni(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                placeholder="Ej: 30123456"
+                                required
+                            />
+                        </div>
+                        <button 
+                            type="submit" 
+                            disabled={isLoading}
+                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                        >
+                            {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
+                            {isLoading ? "Buscando..." : "Buscar Matrícula"}
+                        </button>
+                    </form>
+                </div>
+            )}
+            
+            {/* Paso 2: Seleccionar Plan */}
+            {step === 2 && studentInfo && (
+                <div>
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Múltiples Planes</h2>
+                    <p className="text-gray-600 mb-4">El/La estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado/a en múltiples planes este año. Por favor, seleccione uno:</p>
+                    <div className="space-y-3">
+                        {foundPlans.map(plan => (
+                            <button
+                                key={plan}
+                                onClick={() => handlePlanSelect(plan)}
+                                className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300 font-medium"
+                            >
+                                {plan}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={resetFlow} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver</button>
+                </div>
+            )}
+            
+            {/* Paso 3: Mostrar Certificado (Reutilizamos el componente 'CertificateDisplay') */}
+            {step === 3 && studentInfo && selectedPlan && (
+                <CertificateDisplay
+                    student={studentInfo}
+                    plan={selectedPlan}
+                    onCancel={resetFlow}
+                />
+            )}
+
+        </main>
+      </div>
     );
 };
 
