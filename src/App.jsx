@@ -311,7 +311,7 @@ export default function App() {
     const studentsQuery = query(collection(db, ...dataBasePath, 'students'));
     const unsubscribeStudents = onSnapshot(studentsQuery, (snapshot) => {
       const studentData = snapshotToArray(snapshot);
-      studentData.sort((a, b) => (a.dni || "").localeCompare(b.dni || ""));
+      studentData.sort((a, b) => String(a.dni || "").localeCompare(String(b.dni || "")));
       setStudents(studentData);
     }, (error) => {
       console.error("Error al cargar estudiantes:", error);
@@ -1110,6 +1110,12 @@ const AdminDashboardScreen = ({
                isActive={activeTab === 'materias'} 
                onClick={handleTabChange}
              />
+             <TabButton 
+                id="carga_masiva" 
+                label="8. Carga Masiva" 
+                isActive={activeTab === 'carga_masiva'} 
+                onClick={handleTabChange}
+                />
         </nav>
       </header>
       
@@ -1183,6 +1189,13 @@ const AdminDashboardScreen = ({
                 showMessage={showMessage}
                 materias={materias}
                 deleteMateria={deleteMateria} 
+            />
+          )}
+          {activeTab === 'carga_masiva' && (
+            <CargaMasivaTab 
+                db={db}
+                appId={appId}
+                showMessage={showMessage}
             />
           )}
       </main>
@@ -1440,11 +1453,11 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                             <h2 className="text-xl font-bold">Escuela Superior de Música de Neuquén</h2>
                             <h3 className="text-lg font-semibold">Consejo Provincial de Educación</h3>
                             <h3 className="text-lg font-semibold">Formación Básica en Música (FOBAM)</h3>
-                            <p className="mt-3">Plan de Estudio: <strong>{plan}</strong></p>
+                            <p className="mt-1">Plan de Estudio: <strong>{plan}</strong></p>
                         </div>
                         {/* Derecha (Logo) */}
                         <div>
-                            <img src="/logo.png" alt="Logo" className="w-40 h-auto" /> 
+                            <img src="/logo.png" alt="Logo" className="w-20 h-auto" /> 
                         </div>
                     </div>
                     {/* --- FIN BLOQUE FLEX --- */}
@@ -1454,7 +1467,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                         
                         
                         {/* CAMBIO: Se añadió 'text-center' y se mantuvo el margen superior */}
-                        <h3 className="text-2xl font-semibold mt-10 text-center">CERTIFICADO DE RENDIMIENTO ACADÉMICO (ANALÍTICO)</h3>
+                        <h3 className="text-2xl font-semibold mt-2 text-center">CERTIFICADO DE RENDIMIENTO ACADÉMICO (ANALÍTICO)</h3>
                         
                         
                     </div>
@@ -1571,7 +1584,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                         </div>
 
                         {/* (AJUSTE) Firmas movidas a la Página 2 y líneas restauradas */}
-                        <div className="print-signatures grid grid-cols-2 gap-8 text-sm">
+                        <div className="print-signatures grid grid-cols-2 gap-8 text-sm mt-16">
                             <div>
                                 <p className="print-signature-line"></p>
                             </div>
@@ -1606,6 +1619,75 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
             </div>
         </div>
     );
+};
+
+/**
+ * Pestaña 4: Gestión de Notas (Contenedor Principal)
+ */
+const NotasTab = ({ 
+    db, appId, showMessage, materias, students, matriculaciones, notas, 
+    notasSubTab, setNotasSubTab, snapshotToArray
+}) => {
+  return (
+    <div id="gestion_notas">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Gestión de Notas</h2>
+      
+      {/* Sub-navegación para Notas */}
+      <div className="flex mb-6 border-b border-gray-300">
+        <TabButton 
+          id="ingresar_nota" 
+          label="Ingresar Nota" 
+          isActive={notasSubTab === 'ingresar_nota'} 
+          onClick={setNotasSubTab}
+        />
+        <TabButton 
+          id="ingresar_planilla" 
+          label="Ingresar Planilla" 
+          isActive={notasSubTab === 'ingresar_planilla'} 
+          onClick={setNotasSubTab}
+        />
+        <TabButton 
+          id="ingresar_analitico" 
+          label="Ingresar Analítico" 
+          isActive={notasSubTab === 'ingresar_analitico'} 
+          onClick={setNotasSubTab}
+        />
+      </div>
+
+      {/* Contenido de la Sub-Pestaña */}
+      {notasSubTab === 'ingresar_nota' && (
+        <IngresarNotaIndividual
+            db={db}
+            appId={appId}
+            showMessage={showMessage}
+            materias={materias}
+            matriculaciones={matriculaciones} 
+            snapshotToArray={snapshotToArray} 
+        />
+      )}
+      {notasSubTab === 'ingresar_planilla' && (
+        <IngresarPlanilla
+            db={db}
+            appId={appId}
+            showMessage={showMessage}
+            materias={materias}
+            students={students}
+            matriculaciones={matriculaciones} 
+        />
+      )}
+      {notasSubTab === 'ingresar_analitico' && (
+        <IngresarAnalitico
+            db={db}
+            appId={appId}
+            showMessage={showMessage}
+            materias={materias}
+            students={students}
+            matriculaciones={matriculaciones}
+            notas={notas}              
+        />
+      )}
+    </div>
+  );
 };
 
 /**
@@ -2020,7 +2102,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
             }
         });
         // Ordenar por DNI
-        return [...uniqueStudents.values()].sort((a, b) => a.value.localeCompare(b.value));
+        return [...uniqueStudents.values()].sort((a, b) => String(a.value).localeCompare(String(b.value)));
     }, [matriculaciones]);
 
     const materiasCondicionales = [
@@ -3245,6 +3327,22 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
         if (!instrumento || !plan) {
             return showMessage("Complete ambos campos.", true);
         }
+        // --- (NUEVO) Verificación de Duplicados ---
+        // Normalizamos los inputs para una comparación segura
+        const nuevoInstrumentoLower = instrumento.trim().toLowerCase();
+        const nuevoPlanLower = plan.trim().toLowerCase();
+
+        // Usamos .some() para ver si 'instrumentos' (el prop) ya tiene esta combinación
+        const yaExiste = instrumentos.some(i => 
+            i.instrumento.trim().toLowerCase() === nuevoInstrumentoLower &&
+            i.plan.trim().toLowerCase() === nuevoPlanLower
+        );
+
+        if (yaExiste) {
+            showMessage("Error: Ya existe un instrumento con ese nombre y ese plan.", true);
+            return; // Detenemos la ejecución
+        }
+        // --- Fin Verificación ---
         setLoadingAdd(true);
         try {
             const newInstrumento = { 
@@ -3374,6 +3472,24 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
         if (!materia || !plan || !anio) {
             return showMessage("Complete todos los campos.", true);
         }
+        // --- (NUEVO) Verificación de Duplicados ---
+        // Normalizamos los 3 campos clave para una comparación segura
+        const nuevaMateriaLower = materia.trim().toLowerCase();
+        const nuevoPlanLower = plan.trim().toLowerCase();
+        const nuevoAnioLower = anio.trim().toLowerCase();
+
+        // Verificamos si la combinación de los 3 ya existe en 'materias' (el prop)
+        const yaExiste = materias.some(m => 
+            m.materia.trim().toLowerCase() === nuevaMateriaLower &&
+            m.plan.trim().toLowerCase() === nuevoPlanLower &&
+            (m.anio ? m.anio.trim().toLowerCase() : '') === nuevoAnioLower
+        );
+
+        if (yaExiste) {
+            showMessage("Error: Ya existe una materia con ese nombre, plan y año.", true);
+            return; // Detenemos la ejecución
+        }
+        // --- Fin Verificación ---
         setLoadingAdd(true);
         try {
             const newMateria = { 
@@ -3508,6 +3624,108 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
     );
 };
 
+/**
+ * (NUEVO) Pestaña 8: Carga Masiva de Datos
+ */
+const CargaMasivaTab = ({ db, appId, showMessage }) => {
+    const [jsonData, setJsonData] = useState('');
+    const [collectionName, setCollectionName] = useState('materias');
+    const [loading, setLoading] = useState(false);
+
+    const handleUpload = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+
+        let data;
+        try {
+            // 1. Validar que el JSON sea correcto
+            data = JSON.parse(jsonData);
+        } catch (error) {
+            showMessage("Error: El texto no es un JSON válido. Revisa las comillas y comas.", true);
+            setLoading(false);
+            return;
+        }
+
+        // 2. Validar que sea un array
+        if (!Array.isArray(data) || data.length === 0) {
+            showMessage("Error: El JSON debe ser un array (lista) de objetos, y no estar vacío.", true);
+            setLoading(false);
+            return;
+        }
+
+        try {
+            // 3. Preparar la carga
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', collectionName);
+            const promises = [];
+            
+            // 4. Crear una promesa de 'addDoc' por cada item en el array
+            data.forEach(item => {
+                const newItem = { ...item, timestamp: Timestamp.now() };
+                promises.push(addDoc(colRef, newItem));
+            });
+            
+            // 5. Esperar a que TODAS se completen
+            await Promise.all(promises);
+
+            showMessage(`¡Éxito! Se cargaron ${data.length} nuevos documentos en '${collectionName}'.`, false);
+            setJsonData(''); // Limpiar el campo
+
+        } catch (error) {
+            console.error("Error en carga masiva:", error);
+            showMessage(`Error al guardar: ${error.message}`, true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div id="carga_masiva">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Carga Masiva de Datos</h2>
+
+            <form onSubmit={handleUpload} className="p-6 bg-white rounded-lg shadow-md border space-y-4 max-w-4xl mx-auto">
+                <h3 className="text-lg font-semibold">1. Seleccione el destino</h3>
+                <p className="text-sm text-gray-600">
+                    Asegúrese de que los campos en su JSON coincidan con la colección.
+                </p>
+                
+                <select 
+                    value={collectionName}
+                    onChange={(e) => setCollectionName(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                >
+                    <option value="materias">Materias</option>
+                    <option value="students">Estudiantes</option>
+                    <option value="instrumentos">Instrumentos</option>
+                    {/* (Puedes agregar 'matriculation' si lo necesitas) */}
+                </select>
+
+                <h3 className="text-lg font-semibold pt-4">2. Pegue los datos (en formato JSON)</h3>
+                <p className="text-sm text-gray-600">
+                    Copie el resultado del convertidor CSV a JSON y péguelo aquí.
+                </p>
+                
+                <textarea
+                    rows="10"
+                    value={jsonData}
+                    onChange={(e) => setJsonData(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border font-mono text-sm"
+                    placeholder="[ { ... }, { ... } ]"
+                    required
+                ></textarea>
+
+                <div className="border-t pt-4">
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
+                    >
+                        {loading ? <IconLoading /> : `Cargar ${jsonData.length > 0 ? 'Datos' : ''} a '${collectionName}'`}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
 
 // -----------------------------------------------------------------
 // --- COMPONENTE Formulario de Estudiante (Reutilizable) ---
