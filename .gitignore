@@ -25,3 +25,8 @@ dist-ssr
 
 # Ignorar variables de entorno
 .env
+
+# Ignorar scripts de admin y claves
+setSuperAdmin.cjs
+resetAdminPassword.cjs
+*.json
