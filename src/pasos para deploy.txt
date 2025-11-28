@@ -1,0 +1,43 @@
+Tu Nuevo Flujo de Trabajo (Para el Futuro)
+Olvídate de hacer git push directamente a main. Cada vez que quieras hacer un cambio, deberás seguir este proceso (el que acabamos de hacer):
+
+Crea una Rama (en tu PC):
+
+Antes de empezar a editar, asegúrate de estar en main y actualizado:
+
+Bash
+git checkout main
+git pull
+
+
+Crea una nueva rama para tus cambios:
+
+Bash
+git checkout -b mi-nuevo-cambio
+Haz tus Cambios (en tu PC):
+
+Edita app.jsx, agrega imágenes, etc.
+
+Guarda y Sube la Rama (en tu PC):
+
+Guarda tus cambios como siempre:
+
+Bash
+git add .
+git commit -m "Lo que sea que cambié"
+git push origin mi-nuevo-cambio
+
+
+Crea el "Pull Request" (en GitHub):
+
+Ve a la web de GitHub.
+
+Haz clic en el botón verde "Compare & pull request".
+
+Haz clic en "Create pull request".
+
+Revisa y Fusiona (en GitHub):
+
+Espera a que los "Actions" (las comprobaciones) pasen y te den el (✅) check verde.
+
+Haz clic en "Merge pull request" y confirma.
