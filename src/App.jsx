@@ -23,6 +23,8 @@ import {
     setLogLevel
 } from 'firebase/firestore';
 
+// --- IMPORTANTE: Componente Externo ---
+import CorrelativasChecker from './CorrelativasChecker';
 // ---
 // Configuración Manual de Firebase
 // (Usando la configuración que pegaste)
@@ -1181,25 +1183,31 @@ const AdminDashboardScreen = ({
                isActive={activeTab === 'certificado'} 
                onClick={handleTabChange}
              />
+             <TabButton 
+               id="correlativas" 
+               label="7. Correlativas" 
+               isActive={activeTab === 'correlativas'} 
+               onClick={handleTabChange} 
+             />
             {/* --- (NUEVO) BLOQUE CONDICIONAL PARA SUPERADMIN --- */}
             {/* Estas pestañas solo se mostrarán si userClaims.super_admin es 'true' */}
             {userClaims?.super_admin && (
             <>
              <TabButton 
                id="instrumentos" 
-               label="7. Admin Instrumentos" 
+               label="8. Admin Instrumentos" 
                isActive={activeTab === 'instrumentos'} 
                onClick={handleTabChange}
              />
              <TabButton 
                id="materias" 
-               label="8. Admin Materias" 
+               label="9. Admin Materias" 
                isActive={activeTab === 'materias'} 
                onClick={handleTabChange}
              />
              <TabButton 
                 id="carga_masiva" 
-                label="9. Carga Masiva" 
+                label="10. Carga Masiva" 
                 isActive={activeTab === 'carga_masiva'} 
                 onClick={handleTabChange}
                 />
@@ -1280,6 +1288,7 @@ const AdminDashboardScreen = ({
                 instrumentos={instrumentos}
             />
           )}
+          {activeTab === 'correlativas' && <CorrelativasChecker db={db} appId={appId} />}
           {activeTab === 'materias' && (
             <MateriasTab 
                 db={db}
