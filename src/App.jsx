@@ -25,6 +25,7 @@ import {
 
 // --- IMPORTANTE: Componente Externo ---
 import CorrelativasChecker from './CorrelativasChecker';
+import CursadosActivos from './CursadosActivos';
 // ---
 // Configuración Manual de Firebase
 // (Usando la configuración que pegaste)
@@ -1189,25 +1190,31 @@ const AdminDashboardScreen = ({
                isActive={activeTab === 'correlativas'} 
                onClick={handleTabChange} 
              />
+             <TabButton 
+               id="cursados_activos" 
+               label="8. Cursados Activos" 
+               isActive={activeTab === 'cursados_activos'} 
+               onClick={handleTabChange} 
+             />
             {/* --- (NUEVO) BLOQUE CONDICIONAL PARA SUPERADMIN --- */}
             {/* Estas pestañas solo se mostrarán si userClaims.super_admin es 'true' */}
             {userClaims?.super_admin && (
             <>
              <TabButton 
                id="instrumentos" 
-               label="8. Admin Instrumentos" 
+               label="9. Admin Instrumentos" 
                isActive={activeTab === 'instrumentos'} 
                onClick={handleTabChange}
              />
              <TabButton 
                id="materias" 
-               label="9. Admin Materias" 
+               label="10. Admin Materias" 
                isActive={activeTab === 'materias'} 
                onClick={handleTabChange}
              />
              <TabButton 
                 id="carga_masiva" 
-                label="10. Carga Masiva" 
+                label="11. Carga Masiva" 
                 isActive={activeTab === 'carga_masiva'} 
                 onClick={handleTabChange}
                 />
@@ -1280,6 +1287,16 @@ const AdminDashboardScreen = ({
                 matriculaciones={matriculaciones}
             />
           )}
+          {activeTab === 'correlativas' && 
+             <CorrelativasChecker db={db} appId={appId} />}
+
+          {activeTab === 'cursados_activos' && (
+             <CursadosActivos 
+                db={db} 
+                appId={appId} 
+                showMessage={showMessage} 
+            />
+            )}
           {activeTab === 'instrumentos' && (
             <InstrumentosTab 
                 db={db}
@@ -1288,7 +1305,7 @@ const AdminDashboardScreen = ({
                 instrumentos={instrumentos}
             />
           )}
-          {activeTab === 'correlativas' && <CorrelativasChecker db={db} appId={appId} />}
+          
           {activeTab === 'materias' && (
             <MateriasTab 
                 db={db}

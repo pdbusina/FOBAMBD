@@ -38,7 +38,7 @@ const db = getFirestore(app);
 // --- LÓGICA DE CORRELATIVAS ---
 
 const INSTRUMENTOS_530 = [
-    "Arpa", "Bajo Eléctrico", "Bandoneon", "Batería", "Clarinete", 
+    "Arpa", "Bajo Eléctrico", "Bandoneón", "Batería", "Clarinete", 
     "Contrabajo", "Corno", "Flauta Dulce", "Flauta Traversa", 
     "Guitarra Clásica", "Guitarra Eléctrica", "Guitarra Popular", 
     "Oboe", "Percusión Académica", "Percusión Folklórica", 
