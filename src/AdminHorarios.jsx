@@ -9,7 +9,6 @@ import {
     orderBy,
     Timestamp 
 } from 'firebase/firestore';
-import { IconLoading } from './App'; // Asegúrate de importar o definir el icono si lo usas
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 const HORARIOS = [
@@ -19,23 +18,21 @@ const HORARIOS = [
 ];
 
 const AdminHorarios = ({ db, appId, showMessage, materias }) => {
-    // materias: viene de App.jsx para poder elegir de la lista existente
     const [horarios, setHorarios] = useState([]);
     const [loading, setLoading] = useState(false);
     
-    // Formulario
+    // Formulario (Agregado: 'aula')
     const [form, setForm] = useState({
         materia: '',
         dia: 'Lunes',
         hora: '18:00',
         docente: '',
-        cupo: '' // Opcional, por si quieres controlar cupos a futuro
+        cupo: '10',
+        aula: '' // <--- NUEVO CAMPO
     });
 
-    // 1. Cargar Horarios Existentes en Tiempo Real
     useEffect(() => {
         const horariosRef = collection(db, 'artifacts', appId, 'public', 'data', 'horarios');
-        // Intentamos ordenar, si falla por índices, quita el orderBy
         const q = query(horariosRef, orderBy("materia")); 
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -48,22 +45,23 @@ const AdminHorarios = ({ db, appId, showMessage, materias }) => {
         return () => unsubscribe();
     }, [db, appId]);
 
-    // Obtener lista única de materias para el desplegable (ordenada alfabéticamente)
     const uniqueMaterias = [...new Set(materias.map(m => m.materia))].sort();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!form.materia || !form.docente) return showMessage("Complete Materia y Docente", true);
+        if (!form.materia || !form.docente || !form.cupo) return showMessage("Complete los campos obligatorios", true);
 
         setLoading(true);
         try {
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'horarios');
             await addDoc(colRef, {
                 ...form,
+                cupo: parseInt(form.cupo),
                 timestamp: Timestamp.now()
             });
             showMessage("Horario creado exitosamente", false);
-            setForm({ ...form, docente: '' }); // Limpiar solo docente para agilizar carga
+            // Limpiamos docente y aula para agilizar, mantenemos materia si se quiere cargar otro horario de la misma
+            setForm({ ...form, docente: '', aula: '', cupo: '10' }); 
         } catch (error) {
             console.error(error);
             showMessage(`Error: ${error.message}`, true);
@@ -87,7 +85,7 @@ const AdminHorarios = ({ db, appId, showMessage, materias }) => {
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">Administrar Oferta de Horarios</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* FORMULARIO DE CARGA */}
+                {/* FORMULARIO */}
                 <div className="md:col-span-1 bg-white p-6 rounded-lg shadow-md border h-fit">
                     <h3 className="text-lg font-bold mb-4">Nuevo Horario</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -129,12 +127,37 @@ const AdminHorarios = ({ db, appId, showMessage, materias }) => {
                             </div>
                         </div>
 
+                        {/* NUEVO: AULA Y CUPO */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase">Cupo</label>
+                                <input 
+                                    type="number"
+                                    className="w-full p-2 border rounded"
+                                    value={form.cupo}
+                                    onChange={e => setForm({...form, cupo: e.target.value})}
+                                    min="1"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase">Aula</label>
+                                <input 
+                                    type="text"
+                                    className="w-full p-2 border rounded"
+                                    placeholder="Ej: 14"
+                                    value={form.aula}
+                                    onChange={e => setForm({...form, aula: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase">Docente</label>
                             <input 
                                 type="text"
                                 className="w-full p-2 border rounded"
-                                placeholder="Ej: Prof. Perez"
+                                placeholder="Ej: Perez"
                                 value={form.docente}
                                 onChange={e => setForm({...form, docente: e.target.value})}
                                 required
@@ -151,7 +174,7 @@ const AdminHorarios = ({ db, appId, showMessage, materias }) => {
                     </form>
                 </div>
 
-                {/* LISTADO DE HORARIOS */}
+                {/* LISTADO */}
                 <div className="md:col-span-2 bg-white p-6 rounded-lg shadow-md border overflow-hidden">
                     <h3 className="text-lg font-bold mb-4">Horarios Disponibles ({horarios.length})</h3>
                     <div className="overflow-y-auto max-h-[600px]">
@@ -159,8 +182,8 @@ const AdminHorarios = ({ db, appId, showMessage, materias }) => {
                             <thead className="bg-gray-100">
                                 <tr>
                                     <th className="px-3 py-2 text-left">Materia</th>
-                                    <th className="px-3 py-2 text-left">Día/Hora</th>
-                                    <th className="px-3 py-2 text-left">Docente</th>
+                                    <th className="px-3 py-2 text-left">Detalle</th>
+                                    <th className="px-3 py-2 text-center">Cupo</th>
                                     <th className="px-3 py-2 text-right">Acción</th>
                                 </tr>
                             </thead>
@@ -169,11 +192,18 @@ const AdminHorarios = ({ db, appId, showMessage, materias }) => {
                                     <tr key={h.id} className="hover:bg-gray-50">
                                         <td className="px-3 py-2 font-medium">{h.materia}</td>
                                         <td className="px-3 py-2">
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">
-                                                {h.dia} {h.hora}
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-gray-700">{h.dia} {h.hora}</span>
+                                                <span className="text-xs text-gray-500">
+                                                    Prof: {h.docente} {h.aula ? `| Aula: ${h.aula}` : ''}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-bold">
+                                                {h.cupo}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-2">{h.docente}</td>
                                         <td className="px-3 py-2 text-right">
                                             <button 
                                                 onClick={() => handleDelete(h.id)}

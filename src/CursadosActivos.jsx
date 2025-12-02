@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
     collection, 
     query, 
@@ -9,7 +9,7 @@ import {
     Timestamp 
 } from 'firebase/firestore';
 
-// --- CONSTANTES Y LÓGICA DE CORRELATIVAS ---
+// --- CONSTANTES ---
 const INSTRUMENTOS_530 = [
     "Arpa", "Bajo Eléctrico", "Bandoneon", "Batería", "Clarinete", 
     "Contrabajo", "Corno", "Flauta Dulce", "Flauta Traversa", 
@@ -87,21 +87,20 @@ const getReglasPorPlan = (nombrePlan) => {
     return { reglas, esPlan530 };
 };
 
-// --- COMPONENTE PRINCIPAL ---
 const CursadosActivos = ({ db, appId, showMessage }) => {
     const [dni, setDni] = useState('');
     const [loading, setLoading] = useState(false);
     
-    // Estados para manejo de datos
-    const [studentData, setStudentData] = useState(null); // { nombres, apellidos }
-    const [availablePlans, setAvailablePlans] = useState([]); // Lista de planes matriculados
-    const [selectedPlan, setSelectedPlan] = useState(''); // Plan actualmente seleccionado
-    const [rows, setRows] = useState([]); // Filas de la tabla
-    const [allHorarios, setAllHorarios] = useState([]); // Caché de horarios
-    
+    const [studentData, setStudentData] = useState(null);
+    const [availablePlans, setAvailablePlans] = useState([]);
+    const [selectedPlan, setSelectedPlan] = useState('');
+    const [rows, setRows] = useState([]);
+    const [allHorarios, setAllHorarios] = useState([]);
+    const [conteoInscriptos, setConteoInscriptos] = useState({}); // Mapa: ID_Horario -> Cantidad Inscritos
+
     const currentYear = new Date().getFullYear().toString();
 
-    // --- PASO 1: BUSCAR ALUMNO Y SUS PLANES ---
+    // --- BÚSQUEDA ---
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!dni) return;
@@ -112,13 +111,39 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         setSelectedPlan('');
 
         try {
-            // A. CARGAR HORARIOS (Caché)
+            // A. CARGAR HORARIOS Y CONTAR INSCRITOS
+            // 1. Traer horarios
             const horariosRef = collection(db, 'artifacts', appId, 'public', 'data', 'horarios');
             const horariosSnap = await getDocs(horariosRef);
             const horariosList = horariosSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAllHorarios(horariosList);
 
-            // B. BUSCAR MATRICULACIONES
+            // 2. Traer TODAS las cursadas del año (para contar cupos)
+            const todasCursadasRef = collection(db, 'artifacts', appId, 'public', 'data', 'cursadas');
+            const qTodas = query(todasCursadasRef, where("ciclo_lectivo", "==", currentYear));
+            const todasSnap = await getDocs(qTodas);
+            
+            // 3. Generar Mapa de Conteo
+            const mapaConteo = {};
+            todasSnap.forEach(doc => {
+                const data = doc.data();
+                // Identificamos el horario por coincidencia exacta de materia/dia/hora/docente
+                // Ojo: Si guardas el ID del horario en la cursada sería mejor, pero por ahora lo inferimos
+                const horarioCorrespondiente = horariosList.find(h => 
+                    h.materia === data.materia && 
+                    h.dia === data.dia && 
+                    h.hora === data.hora && 
+                    h.docente === data.docente
+                );
+                
+                if (horarioCorrespondiente) {
+                    const hId = horarioCorrespondiente.id;
+                    mapaConteo[hId] = (mapaConteo[hId] || 0) + 1;
+                }
+            });
+            setConteoInscriptos(mapaConteo);
+
+            // B. BUSCAR MATRICULACIONES DEL ALUMNO
             const matRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
             const qMat = query(matRef, where("dni", "==", dni), where("cicloLectivo", "==", currentYear));
             const matSnap = await getDocs(qMat);
@@ -129,7 +154,6 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 return;
             }
 
-            // Recopilar todos los planes
             const planesEncontrados = [];
             let datosAlumno = null;
 
@@ -144,11 +168,10 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
             setStudentData(datosAlumno);
             setAvailablePlans(planesEncontrados);
 
-            // Si hay un solo plan, cargarlo automáticamente. Si hay más, el usuario elegirá.
             if (planesEncontrados.length === 1) {
                 loadPlanData(planesEncontrados[0], horariosList);
             } else {
-                setLoading(false); // Esperamos a que el usuario elija
+                setLoading(false);
             }
 
         } catch (error) {
@@ -158,37 +181,33 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         }
     };
 
-    // --- PASO 2: CARGAR DATOS DEL PLAN SELECCIONADO ---
     const loadPlanData = async (planTarget, horariosListOverride = null) => {
         setLoading(true);
         setSelectedPlan(planTarget);
         setRows([]);
         
-        // Usamos la lista de horarios pasada o la del estado
         const listaHorarios = horariosListOverride || allHorarios;
 
         try {
-            // 1. Obtener Historia Académica (Aprobadas)
+            // Historia Académica
             const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
             const qNotas = query(notasRef, where("dni", "==", dni), where("plan", "==", planTarget));
             const notasSnap = await getDocs(qNotas);
-            
             const aprobadas = new Set();
             notasSnap.forEach(doc => {
-                const d = doc.data();
-                if (["Promoción", "Examen", "Equivalencia"].includes(d.condicion)) {
-                    aprobadas.add(d.materia);
+                if (["Promoción", "Examen", "Equivalencia"].includes(doc.data().condicion)) {
+                    aprobadas.add(doc.data().materia);
                 }
             });
 
-            // 2. Obtener Materias del Plan
+            // Materias del Plan
             const materiasRef = collection(db, 'artifacts', appId, 'public', 'data', 'materias');
             const qMaterias = query(materiasRef, where("plan", "==", planTarget));
             const materiasSnap = await getDocs(qMaterias);
             const todasLasMaterias = [];
             materiasSnap.forEach(doc => todasLasMaterias.push(doc.data().materia));
 
-            // 3. Calcular Habilitadas (Lógica Correlativas)
+            // Habilitadas
             const { reglas, esPlan530 } = getReglasPorPlan(planTarget);
             const tieneMovimiento = esPlan530 && (aprobadas.has("Expresión Corporal") || aprobadas.has("Danzas Folklóricas"));
             
@@ -211,7 +230,7 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 }
             });
 
-            // 4. Buscar Cursadas YA guardadas en Firebase
+            // Cursadas del Alumno
             const cursadasRef = collection(db, 'artifacts', appId, 'public', 'data', 'cursadas');
             const qCursadas = query(
                 cursadasRef, 
@@ -226,11 +245,9 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 cursadasGuardadas[data.materia] = { id: doc.id, ...data };
             });
 
-            // 5. Construir filas
+            // Construir Filas
             const finalRows = habilitadas.map(materia => {
                 const guardado = cursadasGuardadas[materia] || {};
-                
-                // Filtrar horarios disponibles para ESTA materia
                 const horariosOpciones = listaHorarios.filter(h => h.materia === materia);
                 
                 let selectedScheduleId = "";
@@ -265,7 +282,6 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         }
     };
 
-    // --- MANEJO DE CAMBIOS EN TABLA ---
     const handleScheduleSelection = (index, scheduleId) => {
         const newRows = [...rows];
         const row = newRows[index];
@@ -274,7 +290,7 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         if (scheduleId === "") {
             row.dia = ""; row.hora = ""; row.docente = "";
         } else if (scheduleId === "custom") {
-            // No hacemos nada, permitimos edición manual
+            // Edición manual
         } else {
             const horario = row.opciones.find(h => h.id === scheduleId);
             if (horario) {
@@ -295,7 +311,6 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         setRows(newRows);
     };
 
-    // --- GUARDAR CAMBIOS ---
     const handleSave = async () => {
         if (!selectedPlan) return;
         setLoading(true);
@@ -309,7 +324,7 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                         dni: dni,
                         nombres: studentData.nombres,
                         apellidos: studentData.apellidos,
-                        plan: selectedPlan, // Usamos el plan seleccionado actualmente
+                        plan: selectedPlan,
                         materia: row.materia,
                         dia: row.dia,
                         hora: row.hora,
@@ -327,7 +342,7 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                     processed++;
                 }
             }
-            showMessage(`Se actualizaron ${processed} registros para el plan ${selectedPlan}.`, false);
+            showMessage(`Se actualizaron ${processed} registros.`, false);
         } catch (error) {
             console.error(error);
             showMessage(`Error al guardar: ${error.message}`, true);
@@ -336,19 +351,15 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         }
     };
 
-    // --- CAMBIO DE PLAN DESDE EL SELECTOR ---
     const handlePlanChange = (e) => {
         const newPlan = e.target.value;
-        if (newPlan) {
-            loadPlanData(newPlan);
-        }
+        if (newPlan) loadPlanData(newPlan);
     };
 
     return (
         <div className="w-full">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Gestión de Cursados Activos</h2>
             
-            {/* BUSCADOR */}
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8 flex gap-4 items-end">
                 <div className="flex-grow">
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">DNI del Estudiante</label>
@@ -369,9 +380,8 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 </button>
             </div>
 
-            {/* SELECTOR DE PLAN (SOLO SI HAY MÚLTIPLES) */}
             {availablePlans.length > 1 && (
-                <div className="bg-yellow-50 p-4 border border-yellow-200 rounded-lg mb-6 flex items-center justify-between animate-fade-in">
+                <div className="bg-yellow-50 p-4 border border-yellow-200 rounded-lg mb-6 flex items-center justify-between">
                     <div>
                         <span className="font-bold text-yellow-800 mr-2">¡Atención!</span>
                         <span className="text-yellow-800">Este estudiante tiene múltiples planes activos. Seleccione uno:</span>
@@ -389,7 +399,6 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 </div>
             )}
 
-            {/* TABLA DE CURSADA */}
             {studentData && selectedPlan && rows.length > 0 && (
                 <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="p-6 bg-indigo-50 border-b border-indigo-100 flex justify-between items-center">
@@ -411,8 +420,8 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                             <thead className="bg-gray-100">
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-1/4">Materia</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-1/3">Seleccionar Horario</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Detalle (Editable)</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-1/3">Horarios (Cupo)</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Detalle</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-24">Cond.</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-20">Nota</th>
                                 </tr>
@@ -432,11 +441,23 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                                                     onChange={(e) => handleScheduleSelection(index, e.target.value)}
                                                 >
                                                     <option value="">-- Seleccionar --</option>
-                                                    {row.opciones.map(op => (
-                                                        <option key={op.id} value={op.id}>
-                                                            {op.dia} {op.hora} - {op.docente}
-                                                        </option>
-                                                    ))}
+                                                    {row.opciones.map(op => {
+                                                        const ocupados = conteoInscriptos[op.id] || 0;
+                                                        const cupo = op.cupo || 999;
+                                                        const lleno = ocupados >= cupo;
+                                                        const esMiHorario = row.selectedScheduleId === op.id; 
+                                                        
+                                                        // Permite seleccionar si no está lleno O si ya es mi horario actual
+                                                        return (
+                                                            <option 
+                                                                key={op.id} 
+                                                                value={op.id} 
+                                                                disabled={lleno && !esMiHorario}
+                                                            >
+                                                                {op.dia} {op.hora} | {op.docente} | Aula: {op.aula || 'S/D'} {lleno ? '(COMPLETO)' : `(${ocupados}/${cupo})`}
+                                                            </option>
+                                                        );
+                                                    })}
                                                     <option value="custom">-- Otro / Manual --</option>
                                                 </select>
                                             ) : (

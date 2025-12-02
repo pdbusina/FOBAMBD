@@ -27,6 +27,7 @@ import {
 import CorrelativasChecker from './CorrelativasChecker';
 import CursadosActivos from './CursadosActivos';
 import AdminHorarios from './AdminHorarios';
+import AdminInformes from './AdminInformes';
 // ---
 // Configuración Manual de Firebase
 // (Usando la configuración que pegaste)
@@ -342,7 +343,22 @@ export default function App() {
     const studentsQuery = query(collection(db, ...dataBasePath, 'students'));
     const unsubscribeStudents = onSnapshot(studentsQuery, (snapshot) => {
       const studentData = snapshotToArray(snapshot);
-      studentData.sort((a, b) => String(a.dni || "").localeCompare(String(b.dni || "")));
+      studentData.sort((a, b) => {
+        const apellidoA = (a.apellidos || "").toLowerCase();
+        const apellidoB = (b.apellidos || "").toLowerCase();
+    
+        // Si los apellidos son distintos, ordena por apellido
+        if (apellidoA < apellidoB) return -1;
+        if (apellidoA > apellidoB) return 1;
+    
+        // Si son iguales, desempatar por nombre
+        const nombreA = (a.nombres || "").toLowerCase();
+        const nombreB = (b.nombres || "").toLowerCase();
+        if (nombreA < nombreB) return -1;
+        if (nombreA > nombreB) return 1;
+    
+         return 0;
+        });
       setStudents(studentData);
     }, (error) => {
       console.error("Error al cargar estudiantes:", error);
@@ -1203,25 +1219,31 @@ const AdminDashboardScreen = ({
                 isActive={activeTab === 'admin_horarios'} 
                 onClick={handleTabChange}
              />
+             <TabButton 
+                id="informes" 
+                label="10. Estadísticas" 
+                isActive={activeTab === 'informes'} 
+                onClick={handleTabChange}
+             />
             {/* --- (NUEVO) BLOQUE CONDICIONAL PARA SUPERADMIN --- */}
             {/* Estas pestañas solo se mostrarán si userClaims.super_admin es 'true' */}
             {userClaims?.super_admin && (
             <>
              <TabButton 
                id="instrumentos" 
-               label="10. Admin Instrumentos" 
+               label="11. Admin Instrumentos" 
                isActive={activeTab === 'instrumentos'} 
                onClick={handleTabChange}
              />
              <TabButton 
                id="materias" 
-               label="11. Admin Materias" 
+               label="12. Admin Materias" 
                isActive={activeTab === 'materias'} 
                onClick={handleTabChange}
              />
              <TabButton 
                 id="carga_masiva" 
-                label="12. Carga Masiva" 
+                label="13. Carga Masiva" 
                 isActive={activeTab === 'carga_masiva'} 
                 onClick={handleTabChange}
                 />
@@ -1311,6 +1333,12 @@ const AdminDashboardScreen = ({
                 showMessage={showMessage}
                 materias={materias} // Importante pasarle la lista de materias existente
             />
+            )}
+          {activeTab === 'informes' && (
+             <AdminInformes 
+                db={db}
+                appId={appId}
+             />
             )}
           {activeTab === 'instrumentos' && (
             <InstrumentosTab 
