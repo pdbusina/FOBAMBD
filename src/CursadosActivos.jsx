@@ -9,9 +9,9 @@ import {
     Timestamp 
 } from 'firebase/firestore';
 
-// --- CONSTANTES Y LÓGICA DE CORRELATIVAS (Reutilizada) ---
+// --- CONSTANTES Y LÓGICA DE CORRELATIVAS ---
 const INSTRUMENTOS_530 = [
-    "Arpa", "Bajo Eléctrico", "Bandoneón", "Batería", "Clarinete", 
+    "Arpa", "Bajo Eléctrico", "Bandoneon", "Batería", "Clarinete", 
     "Contrabajo", "Corno", "Flauta Dulce", "Flauta Traversa", 
     "Guitarra Clásica", "Guitarra Eléctrica", "Guitarra Popular", 
     "Oboe", "Percusión Académica", "Percusión Folklórica", 
@@ -35,14 +35,6 @@ const CORRELATIVAS_FIJAS = {
     "Dicción Inglesa 2": ["Canto Popular 3", "Lenguaje Musical 3", "Ensamble 2", "Apreciación Musical 1", "Danzas Folklóricas", "Dicción Inglesa 1", "Educación Vocal"],
     "Canto Popular 5": ["Canto Popular 4", "Lenguaje Musical 4", "Ensamble 3"]
 };
-
-const HORARIOS = [
-    "08:00", "08:45", "09:30", "10:15", "11:00", "11:45", "12:30", 
-    "13:30", "14:15", "15:00", "15:45", "16:30", "17:15", "18:00", 
-    "18:45", "19:30", "20:15", "21:00", "21:40", "22:20", "23:00"
-];
-
-const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
 const normalizarTexto = (texto) => {
     return texto.toLowerCase()
@@ -95,47 +87,88 @@ const getReglasPorPlan = (nombrePlan) => {
     return { reglas, esPlan530 };
 };
 
-// --- COMPONENTE ---
+// --- COMPONENTE PRINCIPAL ---
 const CursadosActivos = ({ db, appId, showMessage }) => {
     const [dni, setDni] = useState('');
     const [loading, setLoading] = useState(false);
-    const [studentData, setStudentData] = useState(null);
-    const [selectedPlan, setSelectedPlan] = useState('');
-    const [rows, setRows] = useState([]); // Aquí guardaremos las materias habilitadas + datos de cursada
+    
+    // Estados para manejo de datos
+    const [studentData, setStudentData] = useState(null); // { nombres, apellidos }
+    const [availablePlans, setAvailablePlans] = useState([]); // Lista de planes matriculados
+    const [selectedPlan, setSelectedPlan] = useState(''); // Plan actualmente seleccionado
+    const [rows, setRows] = useState([]); // Filas de la tabla
+    const [allHorarios, setAllHorarios] = useState([]); // Caché de horarios
+    
     const currentYear = new Date().getFullYear().toString();
 
+    // --- PASO 1: BUSCAR ALUMNO Y SUS PLANES ---
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!dni) return;
         setLoading(true);
         setRows([]);
         setStudentData(null);
+        setAvailablePlans([]);
         setSelectedPlan('');
 
         try {
-            // 1. Buscar Matriculación (para saber el plan)
+            // A. CARGAR HORARIOS (Caché)
+            const horariosRef = collection(db, 'artifacts', appId, 'public', 'data', 'horarios');
+            const horariosSnap = await getDocs(horariosRef);
+            const horariosList = horariosSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setAllHorarios(horariosList);
+
+            // B. BUSCAR MATRICULACIONES
             const matRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
             const qMat = query(matRef, where("dni", "==", dni), where("cicloLectivo", "==", currentYear));
             const matSnap = await getDocs(qMat);
 
             if (matSnap.empty) {
-                showMessage(`El DNI ${dni} no está matriculado en el ciclo ${currentYear}.`, true);
+                showMessage(`El DNI ${dni} no está matriculado en ${currentYear}.`, true);
                 setLoading(false);
                 return;
             }
 
-            // Tomamos el primer plan encontrado (si tiene varios, podrías añadir un selector como en el checker)
-            const matriculaData = matSnap.docs[0].data();
-            const planTarget = matriculaData.plan;
-            
-            setStudentData({
-                nombres: matriculaData.nombres,
-                apellidos: matriculaData.apellidos,
-                plan: planTarget
-            });
-            setSelectedPlan(planTarget);
+            // Recopilar todos los planes
+            const planesEncontrados = [];
+            let datosAlumno = null;
 
-            // 2. Obtener materias APROBADAS (Historia académica)
+            matSnap.forEach(doc => {
+                const d = doc.data();
+                planesEncontrados.push(d.plan);
+                if (!datosAlumno) {
+                    datosAlumno = { nombres: d.nombres, apellidos: d.apellidos };
+                }
+            });
+
+            setStudentData(datosAlumno);
+            setAvailablePlans(planesEncontrados);
+
+            // Si hay un solo plan, cargarlo automáticamente. Si hay más, el usuario elegirá.
+            if (planesEncontrados.length === 1) {
+                loadPlanData(planesEncontrados[0], horariosList);
+            } else {
+                setLoading(false); // Esperamos a que el usuario elija
+            }
+
+        } catch (error) {
+            console.error(error);
+            showMessage(`Error: ${error.message}`, true);
+            setLoading(false);
+        }
+    };
+
+    // --- PASO 2: CARGAR DATOS DEL PLAN SELECCIONADO ---
+    const loadPlanData = async (planTarget, horariosListOverride = null) => {
+        setLoading(true);
+        setSelectedPlan(planTarget);
+        setRows([]);
+        
+        // Usamos la lista de horarios pasada o la del estado
+        const listaHorarios = horariosListOverride || allHorarios;
+
+        try {
+            // 1. Obtener Historia Académica (Aprobadas)
             const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
             const qNotas = query(notasRef, where("dni", "==", dni), where("plan", "==", planTarget));
             const notasSnap = await getDocs(qNotas);
@@ -148,23 +181,20 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 }
             });
 
-            // 3. Obtener TODAS las materias del plan
+            // 2. Obtener Materias del Plan
             const materiasRef = collection(db, 'artifacts', appId, 'public', 'data', 'materias');
             const qMaterias = query(materiasRef, where("plan", "==", planTarget));
             const materiasSnap = await getDocs(qMaterias);
             const todasLasMaterias = [];
             materiasSnap.forEach(doc => todasLasMaterias.push(doc.data().materia));
 
-            // 4. Calcular HABILITADAS (Logic del CorrelativasChecker)
+            // 3. Calcular Habilitadas (Lógica Correlativas)
             const { reglas, esPlan530 } = getReglasPorPlan(planTarget);
             const tieneMovimiento = esPlan530 && (aprobadas.has("Expresión Corporal") || aprobadas.has("Danzas Folklóricas"));
             
             const habilitadas = [];
-
             todasLasMaterias.forEach(materia => {
-                if (aprobadas.has(materia)) return; // Ya aprobada
-
-                // Lógica de movimiento (Plan 530)
+                if (aprobadas.has(materia)) return;
                 if (esPlan530 && tieneMovimiento && (materia === "Expresión Corporal" || materia === "Danzas Folklóricas")) return;
 
                 const requisitos = reglas[materia] || [];
@@ -181,7 +211,7 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 }
             });
 
-            // 5. Buscar si ya existen datos de CURSADA ACTIVA guardados en Firebase
+            // 4. Buscar Cursadas YA guardadas en Firebase
             const cursadasRef = collection(db, 'artifacts', appId, 'public', 'data', 'cursadas');
             const qCursadas = query(
                 cursadasRef, 
@@ -196,18 +226,32 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 cursadasGuardadas[data.materia] = { id: doc.id, ...data };
             });
 
-            // 6. Fusionar Habilitadas con Datos Guardados
+            // 5. Construir filas
             const finalRows = habilitadas.map(materia => {
                 const guardado = cursadasGuardadas[materia] || {};
+                
+                // Filtrar horarios disponibles para ESTA materia
+                const horariosOpciones = listaHorarios.filter(h => h.materia === materia);
+                
+                let selectedScheduleId = "";
+                if (guardado.dia && guardado.hora && guardado.docente) {
+                    const found = horariosOpciones.find(h => 
+                        h.dia === guardado.dia && h.hora === guardado.hora && h.docente === guardado.docente
+                    );
+                    selectedScheduleId = found ? found.id : "custom";
+                }
+
                 return {
                     materia: materia,
+                    selectedScheduleId: selectedScheduleId,
                     dia: guardado.dia || '',
                     hora: guardado.hora || '',
                     docente: guardado.docente || '',
                     ciclo_lectivo: currentYear,
                     condicion: guardado.condicion || 'Regular',
                     nota: guardado.nota || '',
-                    docId: guardado.id || null // Si tiene ID, es update. Si no, es create.
+                    docId: guardado.id || null,
+                    opciones: horariosOpciones
                 };
             }).sort((a,b) => a.materia.localeCompare(b.materia));
 
@@ -215,33 +259,57 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
 
         } catch (error) {
             console.error(error);
-            showMessage(`Error al cargar datos: ${error.message}`, true);
+            showMessage(`Error cargando plan: ${error.message}`, true);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRowChange = (index, field, value) => {
+    // --- MANEJO DE CAMBIOS EN TABLA ---
+    const handleScheduleSelection = (index, scheduleId) => {
         const newRows = [...rows];
-        newRows[index][field] = value;
+        const row = newRows[index];
+        row.selectedScheduleId = scheduleId;
+
+        if (scheduleId === "") {
+            row.dia = ""; row.hora = ""; row.docente = "";
+        } else if (scheduleId === "custom") {
+            // No hacemos nada, permitimos edición manual
+        } else {
+            const horario = row.opciones.find(h => h.id === scheduleId);
+            if (horario) {
+                row.dia = horario.dia;
+                row.hora = horario.hora;
+                row.docente = horario.docente;
+            }
+        }
         setRows(newRows);
     };
 
+    const handleRowChange = (index, field, value) => {
+        const newRows = [...rows];
+        newRows[index][field] = value;
+        if (['dia','hora','docente'].includes(field)) {
+             newRows[index].selectedScheduleId = "custom";
+        }
+        setRows(newRows);
+    };
+
+    // --- GUARDAR CAMBIOS ---
     const handleSave = async () => {
+        if (!selectedPlan) return;
         setLoading(true);
         const cursadasRef = collection(db, 'artifacts', appId, 'public', 'data', 'cursadas');
         let processed = 0;
 
         try {
             for (const row of rows) {
-                // Solo guardamos si el usuario llenó al menos el Docente o el Día (para no guardar basura en blanco)
-                // O si ya existía (tiene docId) y queremos actualizar cambios
                 if (row.docente || row.dia || row.docId) {
                     const dataToSave = {
                         dni: dni,
                         nombres: studentData.nombres,
                         apellidos: studentData.apellidos,
-                        plan: studentData.plan,
+                        plan: selectedPlan, // Usamos el plan seleccionado actualmente
                         materia: row.materia,
                         dia: row.dia,
                         hora: row.hora,
@@ -252,8 +320,6 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                         timestamp: Timestamp.now()
                     };
 
-                    // Generamos un ID único compuesto para evitar duplicados: DNI_MATERIA_CICLO
-                    // Limpiamos espacios en la materia para el ID
                     const compositeId = `${dni}_${row.materia.replace(/\s+/g, '')}_${currentYear}`;
                     const docRef = doc(cursadasRef, compositeId);
 
@@ -261,7 +327,7 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                     processed++;
                 }
             }
-            showMessage(`Se actualizaron ${processed} registros de cursada exitosamente.`, false);
+            showMessage(`Se actualizaron ${processed} registros para el plan ${selectedPlan}.`, false);
         } catch (error) {
             console.error(error);
             showMessage(`Error al guardar: ${error.message}`, true);
@@ -270,11 +336,18 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
         }
     };
 
+    // --- CAMBIO DE PLAN DESDE EL SELECTOR ---
+    const handlePlanChange = (e) => {
+        const newPlan = e.target.value;
+        if (newPlan) {
+            loadPlanData(newPlan);
+        }
+    };
+
     return (
         <div className="w-full">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Gestión de Cursados Activos</h2>
-            <p className="text-gray-600 mb-6">Asigne días, horarios y docentes a las materias que el estudiante está habilitado a cursar.</p>
-
+            
             {/* BUSCADOR */}
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8 flex gap-4 items-end">
                 <div className="flex-grow">
@@ -296,13 +369,33 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                 </button>
             </div>
 
-            {/* RESULTADOS Y TABLA EDITABLE */}
-            {studentData && rows.length > 0 && (
+            {/* SELECTOR DE PLAN (SOLO SI HAY MÚLTIPLES) */}
+            {availablePlans.length > 1 && (
+                <div className="bg-yellow-50 p-4 border border-yellow-200 rounded-lg mb-6 flex items-center justify-between animate-fade-in">
+                    <div>
+                        <span className="font-bold text-yellow-800 mr-2">¡Atención!</span>
+                        <span className="text-yellow-800">Este estudiante tiene múltiples planes activos. Seleccione uno:</span>
+                    </div>
+                    <select 
+                        value={selectedPlan}
+                        onChange={handlePlanChange}
+                        className="p-2 border border-yellow-300 rounded bg-white text-gray-700 font-medium"
+                    >
+                        {selectedPlan === '' && <option value="">-- Seleccione Plan --</option>}
+                        {availablePlans.map(p => (
+                            <option key={p} value={p}>{p}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            {/* TABLA DE CURSADA */}
+            {studentData && selectedPlan && rows.length > 0 && (
                 <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="p-6 bg-indigo-50 border-b border-indigo-100 flex justify-between items-center">
                         <div>
                             <h3 className="text-xl font-bold text-indigo-900">{studentData.apellidos}, {studentData.nombres}</h3>
-                            <p className="text-sm text-indigo-700">Plan: {studentData.plan} | Ciclo Lectivo: {currentYear}</p>
+                            <p className="text-sm text-indigo-700">Plan: <strong>{selectedPlan}</strong> | Ciclo: {currentYear}</p>
                         </div>
                         <button 
                             onClick={handleSave}
@@ -317,74 +410,84 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Materia</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-32">Día</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-32">Hora</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Docente</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-32">Condición</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-24">Nota (Parcial)</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-1/4">Materia</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-1/3">Seleccionar Horario</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Detalle (Editable)</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-24">Cond.</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase w-20">Nota</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {rows.map((row, index) => (
                                     <tr key={index} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.materia}</td>
+                                        <td className="px-4 py-3 text-sm font-medium text-gray-900 align-top pt-4">
+                                            {row.materia}
+                                        </td>
                                         
-                                        {/* DÍA */}
-                                        <td className="px-2 py-2">
-                                            <select 
-                                                value={row.dia}
-                                                onChange={(e) => handleRowChange(index, 'dia', e.target.value)}
-                                                className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                            >
-                                                <option value="">-</option>
-                                                {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
-                                            </select>
+                                        <td className="px-4 py-3 align-top">
+                                            {row.opciones && row.opciones.length > 0 ? (
+                                                <select 
+                                                    className="w-full text-sm border-indigo-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-indigo-50/50"
+                                                    value={row.selectedScheduleId}
+                                                    onChange={(e) => handleScheduleSelection(index, e.target.value)}
+                                                >
+                                                    <option value="">-- Seleccionar --</option>
+                                                    {row.opciones.map(op => (
+                                                        <option key={op.id} value={op.id}>
+                                                            {op.dia} {op.hora} - {op.docente}
+                                                        </option>
+                                                    ))}
+                                                    <option value="custom">-- Otro / Manual --</option>
+                                                </select>
+                                            ) : (
+                                                <span className="text-xs text-gray-400 italic">No hay horarios definidos</span>
+                                            )}
                                         </td>
 
-                                        {/* HORA */}
-                                        <td className="px-2 py-2">
-                                            <select 
-                                                value={row.hora}
-                                                onChange={(e) => handleRowChange(index, 'hora', e.target.value)}
-                                                className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                            >
-                                                <option value="">-</option>
-                                                {HORARIOS.map(h => <option key={h} value={h}>{h}</option>)}
-                                            </select>
-                                        </td>
-
-                                        {/* DOCENTE */}
-                                        <td className="px-2 py-2">
+                                        <td className="px-4 py-3 align-top space-y-1">
+                                            <div className="flex gap-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={row.dia} 
+                                                    onChange={(e) => handleRowChange(index, 'dia', e.target.value)}
+                                                    className="w-1/3 text-xs border-gray-300 rounded" 
+                                                    placeholder="Día"
+                                                />
+                                                <input 
+                                                    type="text" 
+                                                    value={row.hora} 
+                                                    onChange={(e) => handleRowChange(index, 'hora', e.target.value)}
+                                                    className="w-1/3 text-xs border-gray-300 rounded" 
+                                                    placeholder="Hora"
+                                                />
+                                            </div>
                                             <input 
                                                 type="text" 
-                                                value={row.docente}
+                                                value={row.docente} 
                                                 onChange={(e) => handleRowChange(index, 'docente', e.target.value)}
-                                                className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                                placeholder="Nombre Docente"
+                                                className="w-full text-xs border-gray-300 rounded" 
+                                                placeholder="Docente"
                                             />
                                         </td>
 
-                                        {/* CONDICIÓN */}
-                                        <td className="px-2 py-2">
+                                        <td className="px-2 py-3 align-top">
                                             <select 
                                                 value={row.condicion}
                                                 onChange={(e) => handleRowChange(index, 'condicion', e.target.value)}
-                                                className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                className="w-full text-xs border-gray-300 rounded"
                                             >
-                                                <option value="Regular">Regular</option>
-                                                <option value="Libre">Libre</option>
-                                                <option value="Oyente">Oyente</option>
+                                                <option value="Regular">Reg.</option>
+                                                <option value="Libre">Lib.</option>
+                                                <option value="Oyente">Oye.</option>
                                             </select>
                                         </td>
 
-                                        {/* NOTA */}
-                                        <td className="px-2 py-2">
+                                        <td className="px-2 py-3 align-top">
                                             <input 
                                                 type="text" 
                                                 value={row.nota}
                                                 onChange={(e) => handleRowChange(index, 'nota', e.target.value)}
-                                                className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                className="w-full text-xs border-gray-300 rounded text-center"
                                                 placeholder="-"
                                             />
                                         </td>
@@ -393,12 +496,6 @@ const CursadosActivos = ({ db, appId, showMessage }) => {
                             </tbody>
                         </table>
                     </div>
-                </div>
-            )}
-
-            {studentData && rows.length === 0 && (
-                <div className="bg-yellow-50 p-4 border border-yellow-200 rounded-lg text-yellow-800 mt-4">
-                    Este estudiante no tiene materias habilitadas por correlatividad o ya aprobó todo el plan.
                 </div>
             )}
         </div>
