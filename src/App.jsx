@@ -229,7 +229,7 @@ export default function App() {
         return () => subscription.unsubscribe();
     }, []);
 
-    // --- 2. Carga de Datos ---
+    // --- 2. Carga de Datos e Inserción de Listeners ---
     useEffect(() => {
         if (!userId) return;
 
@@ -282,6 +282,17 @@ export default function App() {
         };
 
         loadData();
+
+        // --- Suscripción a Cambios en Tiempo Real ---
+        const channel = supabase.channel('db-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'instrumentos' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'materias' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculaciones' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, () => loadData())
+            .subscribe();
+
+        return () => supabase.removeChannel(channel);
     }, [userId]);
 
     // --- 3. Utilidades y Navegación ---
