@@ -232,12 +232,26 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones })
                     ) : (
                         <form onSubmit={handleMatriculaSubmit} className="p-6 bg-white rounded-lg shadow-md border space-y-4">
                             <p><strong>{studentForMatricula.apellidos}, {studentForMatricula.nombres}</strong></p>
-                            <select value={selectedInstrumentoId} onChange={(e) => { setSelectedInstrumentoId(e.target.value); setSelectedPlan(instrumentos.find(i => i.id === e.target.value)?.plan || ''); }} className="w-full rounded-md border-gray-300 p-3 border" required>
-                                <option value="">Seleccione Instrumento...</option>
-                                {instrumentos.map(i => <option key={i.id} value={i.id}>{i.instrumento} (Plan: {i.plan})</option>)}
-                            </select>
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-bold">Matricular</button>
-                            <button type="button" onClick={() => setStudentForMatricula(null)} className="w-full text-indigo-600">Cancelar</button>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-gray-500 uppercase">Instrumento</label>
+                                <select value={selectedInstrumentoId} onChange={(e) => { setSelectedInstrumentoId(e.target.value); setSelectedPlan(instrumentos.find(i => i.id === e.target.value)?.plan || ''); }} className="w-full rounded-md border-gray-300 p-3 border" required>
+                                    <option value="">Seleccione Instrumento...</option>
+                                    {instrumentos.map(i => <option key={i.id} value={i.id}>{i.instrumento} (Plan: {i.plan})</option>)}
+                                </select>
+                            </div>
+
+                            {selectedPlan && (
+                                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-md">
+                                    <label className="text-xs font-bold text-indigo-500 uppercase">Plan de Estudio Asignado</label>
+                                    <p className="text-lg font-bold text-indigo-900">{selectedPlan}</p>
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={!selectedInstrumentoId || !selectedPlan} className="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-green-700 disabled:bg-gray-400">
+                                Matricular en Ciclo {currentYear}
+                            </button>
+                            <button type="button" onClick={() => setStudentForMatricula(null)} className="w-full text-gray-500 text-sm">Cancelar</button>
+
                         </form>
                     )}
                 </div>
@@ -246,11 +260,24 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones })
                     <div className="overflow-x-auto rounded-lg shadow-md border max-h-[70vh] overflow-y-auto">
                         <table className="min-w-full divide-y divide-gray-200 text-sm">
                             <thead className="bg-indigo-600 text-white">
-                                <tr><th>Apellido</th><th>Nombre</th><th>DNI</th><th>Instrumento</th></tr>
+                                <tr>
+                                    <th className="px-3 py-2 text-left">Apellido</th>
+                                    <th className="px-3 py-2 text-left">Nombre</th>
+                                    <th className="px-3 py-2 text-left">DNI</th>
+                                    <th className="px-3 py-2 text-left">Instrumento / Plan</th>
+                                </tr>
                             </thead>
                             <tbody>
-                                {matriculacionesDelAnio.map(m => <tr key={m.id}><td>{m.apellidos}</td><td>{m.nombres}</td><td>{m.dni}</td><td>{m.instrumento}</td></tr>)}
+                                {matriculacionesDelAnio.map(m => (
+                                    <tr key={m.id} className="border-b">
+                                        <td className="px-3 py-2">{m.apellidos}</td>
+                                        <td className="px-3 py-2">{m.nombres}</td>
+                                        <td className="px-3 py-2">{m.dni}</td>
+                                        <td className="px-3 py-2">{m.instrumento} ({m.plan})</td>
+                                    </tr>
+                                ))}
                             </tbody>
+
                         </table>
                     </div>
                 </div>
@@ -441,7 +468,13 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         { name: 'email', label: 'Email', type: 'email', required: true },
         { name: 'fechanacimiento', label: 'Fecha de Nacimiento', type: 'date', required: true },
         { name: 'genero', label: 'Género', type: 'select', required: true, options: ['Masculino', 'Femenino', 'Otro'] },
+        { name: 'nacionalidad', label: 'Nacionalidad', type: 'text', required: false },
+        { name: 'direccion', label: 'Dirección', type: 'text', required: false },
+        { name: 'ciudad', label: 'Ciudad', type: 'text', required: false },
+        { name: 'telefono', label: 'Teléfono', type: 'text', required: false },
+        { name: 'telefonourgencias', label: 'Teléfono Urgencias', type: 'text', required: false },
     ];
+
 
     const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };
     return (

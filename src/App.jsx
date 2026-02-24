@@ -141,13 +141,20 @@ export default function App() {
                 setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
             }
 
-            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles(dni, apellido, nombre)');
+            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles(dni, apellido, nombre), instrumentos(nombre)');
             if (matric) {
                 setMatriculaciones(matric.map(m => ({
-                    id: m.id, dni: m.perfiles?.dni, apellidos: m.perfiles?.apellido, nombres: m.perfiles?.nombre,
-                    plan: m.plan, cicloLectivo: m.ciclo_lectivo.toString(), instrumento: m.instrumento_id
+                    id: m.id,
+                    dni: m.perfiles?.dni,
+                    apellidos: m.perfiles?.apellido,
+                    nombres: m.perfiles?.nombre,
+                    plan: m.plan,
+                    cicloLectivo: m.ciclo_levito?.toString() || m.ciclo_lectivo?.toString(),
+                    instrumentoId: m.instrumento_id,
+                    instrumento: m.instrumentos?.nombre || "No asignado"
                 })));
             }
+
 
             const { data: nts } = await supabase.from('notas').select('*, matriculaciones(perfiles(dni)), materias(nombre)');
             if (nts) {

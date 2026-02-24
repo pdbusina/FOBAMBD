@@ -55,22 +55,25 @@ export const AnaliticoTab = ({
             // 2. Buscar Matriculaciones (para ver planes)
             const { data: matriculas } = await supabase
                 .from('matriculaciones')
-                .select('*')
+                .select('plan')
                 .eq('perfil_id', studentData.id);
 
-            if (!matriculas || matriculas.length === 0) {
-                showMessage(`El estudiante no tiene matriculaciones registradas.`, true);
+            // 3. Buscar Notas del estudiante (también para ver planes históricos)
+            const { data: nts } = await supabase
+                .from('notas')
+                .select('*, materias(nombre, plan)')
+                .eq('perfil_id', studentData.id);
+
+            const plansFromMatriculas = matriculas ? matriculas.map(m => m.plan) : [];
+            const plansFromNotas = nts ? nts.map(n => n.materias?.plan).filter(Boolean) : [];
+
+            const planesUnicos = [...new Set([...plansFromMatriculas, ...plansFromNotas])];
+
+            if (planesUnicos.length === 0) {
+                showMessage(`El estudiante no tiene matriculaciones ni notas registradas en ningún plan.`, true);
                 setStep(1);
                 return;
             }
-
-            const planesUnicos = [...new Set(matriculas.map(m => m.plan))];
-
-            // 3. Buscar Notas del estudiante
-            const { data: nts } = await supabase
-                .from('notas')
-                .select('*, materias(nombre)')
-                .eq('perfil_id', studentData.id);
 
             if (nts) {
                 setNotasData(nts.map(n => ({
@@ -97,6 +100,7 @@ export const AnaliticoTab = ({
                 setStep(3);
             }
             showMessage(`Datos cargados para ${studentData.nombre} ${studentData.apellido}.`, false);
+
 
         } catch (error) {
             console.error("Error buscando DNI:", error);
