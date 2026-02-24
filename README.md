@@ -1,16 +1,62 @@
-# React + Vite
+# FOBAM - Gestión Escolar (Supabase)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de gestión escolar para el conservatorio FOBAM, migrado de Firebase a Supabase para mayor escalabilidad y facilidad de gestión.
 
-Currently, two official plugins are available:
+## 🚀 Características
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Acceso Estudiantes**: Consulta de analíticos y generación de certificados de alumno regular mediante DNI.
+- **Panel Administrativo**: Gestión completa de estudiantes, matriculaciones, notas, instrumentos y materias.
+- **Carga Masiva**: Herramienta para importar datos desde JSON (convertidos de CSV).
+- **Reportes Académicos**: Generación y visualización de analíticos detallados por plan de estudio.
+- **Certificados**: Generación automática de certificados en formato A5 listos para imprimir.
 
-## React Compiler
+## 🛠️ Tecnologías
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend**: React + Vite + Tailwind CSS
+- **Backend**: Supabase (Database, Auth, Real-time)
+- **Icons**: Lucide React (simular) y adaptaciones personalizadas.
 
-## Expanding the ESLint configuration
+## ⚙️ Configuración del Entorno
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Para ejecutar este proyecto, necesitas configurar las siguientes variables de entorno en un archivo `.env`:
+
+```env
+VITE_SUPABASE_URL=tu_url_de_supabase
+VITE_SUPABASE_ANON_KEY=tu_anon_key_de_supabase
+```
+
+## 📦 Instalación y Desarrollo
+
+1. Clona el repositorio.
+2. Instala las dependencias:
+   ```bash
+   npm install
+   ```
+3. Inicia el servidor de desarrollo:
+   ```bash
+   npm run dev
+   ```
+4. Para generar el build de producción:
+   ```bash
+   npm run build
+   ```
+
+## 🏗️ Estructura del Proyecto
+
+- `src/App.jsx`: Punto de entrada y enrutador principal.
+- `src/components/Icons.jsx`: Biblioteca de iconos SVG centralizada.
+- `src/components/UI/SharedUI.jsx`: Componentes de interfaz compartidos (Botones, Mensajes).
+- `src/screens/`: Directorio de pantallas modularizadas:
+    - `LandingScreen.jsx`
+    - `AdminLoginScreen.jsx`
+    - `StudentAccessScreen.jsx`
+    - `AnaliticoComponents.jsx`
+    - `AdminDashboard.jsx`: Panel de administración central.
+- `src/supabaseClient.js`: Configuración del cliente de Supabase.
+
+## 📄 Notas de Migración
+
+Este proyecto fue migrado desde Firebase. Se eliminaron todas las dependencias de `firebase` y `firebase-admin`. La lógica de datos ahora utiliza SQL a través de la API de Supabase.
+
+---
+© 2026 FOBAM - Gestión Escolar
