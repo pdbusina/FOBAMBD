@@ -22,24 +22,38 @@ export const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, studen
         const currentYear = new Date().getFullYear().toString();
 
         try {
-            const matriculasDelDNI = matriculaciones.filter(m =>
-                m.dni === dni &&
-                m.cicloLectivo === currentYear
-            );
+            // 1. Buscar el perfil del estudiante por DNI
+            const { data: studentData, error: studentError } = await db
+                .from('perfiles')
+                .select('*')
+                .eq('dni', dni)
+                .single();
 
-            if (matriculasDelDNI.length === 0) {
+            if (studentError || !studentData) {
+                console.error("Error buscando estudiante:", studentError);
+                setIsLoading(false);
+                return showMessage(`No se encontró registro para el DNI ${dni}.`, true);
+            }
+
+            // 2. Buscar matriculaciones activas para ese perfil en el ciclo actual
+            const { data: matriculasDelDNI, error: matriculaError } = await db
+                .from('matriculaciones')
+                .select('*')
+                .eq('perfil_id', studentData.id)
+                .eq('ciclo_lectivo', parseInt(currentYear));
+
+            if (matriculaError || !matriculasDelDNI || matriculasDelDNI.length === 0) {
+                console.error("Error buscando matrícula:", matriculaError);
                 setIsLoading(false);
                 return showMessage(`No se encontró matrícula activa para el DNI ${dni} en el ciclo ${currentYear}.`, true);
             }
 
-            const studentData = students.find(s => s.dni === dni);
-            const firstMatricula = matriculasDelDNI[0];
-
             setStudentInfo({
-                dni: firstMatricula.dni,
-                nombres: firstMatricula.nombres,
-                apellidos: firstMatricula.apellidos,
-                genero: studentData ? studentData.genero : 'Otro'
+                id: studentData.id,
+                dni: studentData.dni,
+                nombres: studentData.nombre,
+                apellidos: studentData.apellido,
+                genero: studentData.genero || 'Otro'
             });
 
             const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
@@ -53,12 +67,13 @@ export const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, studen
             }
 
         } catch (error) {
-            console.error("Error buscando matrícula:", error);
+            console.error("Error en el proceso de búsqueda:", error);
             showMessage(`Error al consultar los datos: ${error.message}`, true);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     const handlePlanSelect = (plan) => {
         setSelectedPlan(plan);

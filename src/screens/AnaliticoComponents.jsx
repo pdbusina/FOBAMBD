@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
+import { supabase } from '../supabaseClient';
 import { IconLoading, IconPrint } from '../components/Icons';
 
 /**
  * Pestaña 5: Analítico
  */
 export const AnaliticoTab = ({
-    showMessage, materias, students, matriculaciones, notas, snapshotToArray
+    showMessage
 }) => {
+
     const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Mostrar Reporte
     const [dniSearch, setDniSearch] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
@@ -14,6 +16,9 @@ export const AnaliticoTab = ({
     const [foundPlans, setFoundPlans] = useState([]);
     const [selectedPlan, setSelectedPlan] = useState('');
     const [studentInfo, setStudentInfo] = useState(null);
+
+    const [materiasData, setMateriasData] = useState([]);
+    const [notasData, setNotasData] = useState([]);
 
     const handleDniSearch = async (e) => {
         e.preventDefault();
@@ -25,25 +30,74 @@ export const AnaliticoTab = ({
         setStudentInfo(null);
 
         try {
-            const matriculasDelDNI = matriculaciones.filter(m => m.dni === dniSearch);
-            const studentData = students.find(s => s.dni === dniSearch);
+            // 1. Buscar Perfil
+            const { data: studentData, error: studentError } = await supabase
+                .from('perfiles')
+                .select('*')
+                .eq('dni', dniSearch)
+                .single();
 
-            if (matriculasDelDNI.length === 0 || !studentData) {
-                showMessage(`DNI ${dniSearch} no encontrado o sin matriculaciones.`, true);
+            if (studentError || !studentData) {
+                showMessage(`Estudiante con DNI ${dniSearch} no encontrado.`, true);
                 setStep(1);
-            } else {
-                const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
-                setStudentInfo(studentData);
-
-                if (planesUnicos.length > 1) {
-                    setFoundPlans(planesUnicos);
-                    setStep(2);
-                } else {
-                    setSelectedPlan(planesUnicos[0]);
-                    setStep(3);
-                }
-                showMessage(`Estudiante ${studentData.nombres} ${studentData.apellidos} encontrado.`, false);
+                return;
             }
+
+            setStudentInfo({
+                id: studentData.id,
+                dni: studentData.dni,
+                nombres: studentData.nombre,
+                apellidos: studentData.apellido,
+                fechanacimiento: studentData.fecha_nacimiento,
+                nacionalidad: studentData.nacionalidad
+            });
+
+            // 2. Buscar Matriculaciones (para ver planes)
+            const { data: matriculas } = await supabase
+                .from('matriculaciones')
+                .select('*')
+                .eq('perfil_id', studentData.id);
+
+            if (!matriculas || matriculas.length === 0) {
+                showMessage(`El estudiante no tiene matriculaciones registradas.`, true);
+                setStep(1);
+                return;
+            }
+
+            const planesUnicos = [...new Set(matriculas.map(m => m.plan))];
+
+            // 3. Buscar Notas del estudiante
+            const { data: nts } = await supabase
+                .from('notas')
+                .select('*, materias(nombre)')
+                .eq('perfil_id', studentData.id);
+
+            if (nts) {
+                setNotasData(nts.map(n => ({
+                    dni: studentData.dni,
+                    materia: n.materias?.nombre,
+                    nota: n.calificacion,
+                    condicion: n.condicion,
+                    fecha: n.fecha,
+                    libro_folio: n.libro_folio
+                })));
+            }
+
+            // 4. Buscar todas las materias (necesarias para el reporte)
+            const { data: mats } = await supabase.from('materias').select('*');
+            if (mats) {
+                setMateriasData(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, materia: m.nombre })));
+            }
+
+            if (planesUnicos.length > 1) {
+                setFoundPlans(planesUnicos);
+                setStep(2);
+            } else {
+                setSelectedPlan(planesUnicos[0]);
+                setStep(3);
+            }
+            showMessage(`Datos cargados para ${studentData.nombre} ${studentData.apellido}.`, false);
+
         } catch (error) {
             console.error("Error buscando DNI:", error);
             showMessage(`Error de búsqueda: ${error.message}`, true);
@@ -51,6 +105,7 @@ export const AnaliticoTab = ({
             setSearchLoading(false);
         }
     };
+
 
     const handlePlanSelect = (plan) => {
         setSelectedPlan(plan);
@@ -117,11 +172,12 @@ export const AnaliticoTab = ({
                 <AnaliticoReport
                     student={studentInfo}
                     plan={selectedPlan}
-                    allNotas={notas}
-                    allMaterias={materias}
+                    allNotas={notasData}
+                    allMaterias={materiasData}
                     onCancel={resetForm}
                 />
             )}
+
         </div>
     );
 };
