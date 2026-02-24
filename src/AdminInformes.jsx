@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { supabase } from './supabaseClient';
 
 // --- COMPONENTES UI AUXILIARES ---
 
@@ -60,7 +60,6 @@ const calculateAge = (birthDateString) => {
     }
 };
 
-// Categoría específica para la Matriz (12, 13... +25)
 const getMatrixAgeCategory = (age) => {
     if (age === null) return 'N/D';
     if (age < 12) return '<12';
@@ -70,7 +69,6 @@ const getMatrixAgeCategory = (age) => {
     return 'N/D';
 };
 
-// Categoría general para el reporte demográfico (Rangos)
 const getGeneralAgeRange = (age) => {
     if (age === null) return 'Sin datos';
     if (age < 12) return "Niños (<12)";
@@ -86,7 +84,7 @@ const extractYearFromSubject = (materia) => {
     const esLenguaje = mat.includes("lenguaje musical");
 
     if (esTroncal || esLenguaje) {
-        const match = materia.match(/(\d+)(?!.*\d)/); // Busca el último número
+        const match = materia.match(/(\d+)(?!.*\d)/);
         if (match) return parseInt(match[0]);
     }
     return null;
@@ -94,9 +92,9 @@ const extractYearFromSubject = (materia) => {
 
 // --- COMPONENTE PRINCIPAL ---
 
-const AdminInformes = ({ db, appId }) => {
+const AdminInformes = () => {
     const [loading, setLoading] = useState(true);
-    
+
     // Estado para Reportes Generales
     const [stats, setStats] = useState({
         totalEstudiantes: 0,
@@ -111,152 +109,148 @@ const AdminInformes = ({ db, appId }) => {
     // Estado para la Matriz Específica
     const [ageMatrix, setAgeMatrix] = useState({});
 
-    const currentYear = new Date().getFullYear().toString();
+    const currentYear = new Date().getFullYear();
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                // 1. Obtener Datos
-                const [matSnap, stSnap, curSnap] = await Promise.all([
-                    getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'matriculation'), where("cicloLectivo", "==", currentYear))),
-                    getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students')),
-                    getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'cursadas'), where("ciclo_lectivo", "==", currentYear)))
-                ]);
+        fetchData();
+    }, []);
 
-                const matriculados = matSnap.docs.map(d => d.data());
-                const estudiantesDB = stSnap.docs.map(d => d.data());
-                const cursadas = curSnap.docs.map(d => d.data());
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            // 1. Obtener Datos de Supabase
+            const { data: matriculados } = await supabase
+                .from('matriculaciones')
+                .select('*, perfiles(*), instrumentos(nombre)')
+                .eq('ciclo_lectivo', currentYear);
 
-                // Mapeos rápidos
-                const mapEstudiantes = {};
-                estudiantesDB.forEach(s => mapEstudiantes[s.dni] = s);
+            const { data: estudiantesDB } = await supabase
+                .from('perfiles')
+                .select('*');
 
-                // --- PROCESAMIENTO A: REPORTES GENERALES ---
-                
-                // Identificar estudiantes activos
-                const dnisActivos = new Set(matriculados.map(m => m.dni));
-                const estudiantesActivosLista = estudiantesDB.filter(s => dnisActivos.has(s.dni));
+            const { data: cursadas } = await supabase
+                .from('cursadas_activas')
+                .select('*, perfiles(dni), horarios(materias(nombre))')
+                .eq('ciclo_lectivo', currentYear);
 
-                // Contadores Generales
-                const countInstrumento = {};
-                matriculados.forEach(m => {
-                    const inst = m.instrumento || 'Sin definir';
-                    countInstrumento[inst] = (countInstrumento[inst] || 0) + 1;
-                });
+            if (!matriculados || !estudiantesDB || !cursadas) throw new Error("Error cargando datos");
 
-                const countNac = {};
-                const countGen = {};
-                const countEdadGeneral = {};
-                
-                estudiantesActivosLista.forEach(s => {
-                    // Nac
-                    const nac = s.nacionalidad || 'No especificada';
-                    countNac[nac] = (countNac[nac] || 0) + 1;
-                    // Gen
-                    const gen = s.genero || 'No especificado';
-                    countGen[gen] = (countGen[gen] || 0) + 1;
-                    // Edad General
-                    const edad = calculateAge(s.fechanacimiento);
-                    const rango = getGeneralAgeRange(edad);
-                    countEdadGeneral[rango] = (countEdadGeneral[rango] || 0) + 1;
-                });
+            // Mapeos rápidos
+            const mapEstudiantes = {};
+            estudiantesDB.forEach(s => mapEstudiantes[s.dni] = s);
 
-                const countMateria = {};
-                cursadas.forEach(c => {
-                    countMateria[c.materia] = (countMateria[c.materia] || 0) + 1;
-                });
+            // --- PROCESAMIENTO A: REPORTES GENERALES ---
 
-                const toArray = (obj, keyName="nombre") => Object.entries(obj)
-                    .map(([k, v]) => ({ [keyName]: k, count: v }))
-                    .sort((a, b) => b.count - a.count);
+            // Identificar estudiantes activos
+            const dnisActivos = new Set(matriculados.map(m => m.perfiles?.dni));
+            const estudiantesActivosLista = estudiantesDB.filter(s => dnisActivos.has(s.dni));
 
-                setStats({
-                    totalEstudiantes: estudiantesActivosLista.length,
-                    totalMatriculados: matriculados.length,
-                    porInstrumento: toArray(countInstrumento, "instrumento"),
-                    porNacionalidad: toArray(countNac, "nacionalidad"),
-                    porGenero: toArray(countGen, "genero"),
-                    porEdadGeneral: toArray(countEdadGeneral, "rango"),
-                    porMateria: toArray(countMateria, "materia").slice(0, 20)
-                });
+            // Contadores Generales
+            const countInstrumento = {};
+            matriculados.forEach(m => {
+                const inst = m.instrumentos?.nombre || 'Sin definir';
+                countInstrumento[inst] = (countInstrumento[inst] || 0) + 1;
+            });
 
-                // --- PROCESAMIENTO B: MATRIZ DE EDADES ---
+            const countNac = {};
+            const countGen = {};
+            const countEdadGeneral = {};
 
-                // Inicializar matriz vacía
-                const matrix = {};
-                for (let i = 1; i <= 5; i++) {
-                    matrix[i] = {
-                        total: 0,
-                        masculinos: 0,
-                        ages: {
-                            '<12': 0, '12': 0, '13': 0, '14': 0, '15': 0, 
-                            '16': 0, '17': 0, '18': 0, '19': 0, '20-24': 0, '+25': 0, 'N/D': 0
+            estudiantesActivosLista.forEach(s => {
+                const nac = s.nacionalidad || 'No especificada';
+                countNac[nac] = (countNac[nac] || 0) + 1;
+                const gen = s.genero || 'No especificado';
+                countGen[gen] = (countGen[gen] || 0) + 1;
+                const edad = calculateAge(s.fecha_nacimiento);
+                const rango = getGeneralAgeRange(edad);
+                countEdadGeneral[rango] = (countEdadGeneral[rango] || 0) + 1;
+            });
+
+            const countMateria = {};
+            cursadas.forEach(c => {
+                const matNombre = c.horarios?.materias?.nombre || 'Desconocida';
+                countMateria[matNombre] = (countMateria[matNombre] || 0) + 1;
+            });
+
+            const toArray = (obj, keyName = "nombre") => Object.entries(obj)
+                .map(([k, v]) => ({ [keyName]: k, count: v }))
+                .sort((a, b) => b.count - a.count);
+
+            setStats({
+                totalEstudiantes: estudiantesActivosLista.length,
+                totalMatriculados: matriculados.length,
+                porInstrumento: toArray(countInstrumento, "instrumento"),
+                porNacionalidad: toArray(countNac, "nacionalidad"),
+                porGenero: toArray(countGen, "genero"),
+                porEdadGeneral: toArray(countEdadGeneral, "rango"),
+                porMateria: toArray(countMateria, "materia").slice(0, 20)
+            });
+
+            // --- PROCESAMIENTO B: MATRIZ DE EDADES ---
+            const matrix = {};
+            for (let i = 1; i <= 5; i++) {
+                matrix[i] = {
+                    total: 0,
+                    masculinos: 0,
+                    ages: {
+                        '<12': 0, '12': 0, '13': 0, '14': 0, '15': 0,
+                        '16': 0, '17': 0, '18': 0, '19': 0, '20-24': 0, '+25': 0, 'N/D': 0
+                    }
+                };
+            }
+
+            const mapCursadasPorDNI = {};
+            cursadas.forEach(c => {
+                const dni = c.perfiles?.dni;
+                if (!dni) return;
+                const matNombre = c.horarios?.materias?.nombre || '';
+                if (!mapCursadasPorDNI[dni]) mapCursadasPorDNI[dni] = [];
+                mapCursadasPorDNI[dni].push(matNombre);
+            });
+
+            Object.keys(mapCursadasPorDNI).forEach(dni => {
+                const studentInfo = mapEstudiantes[dni];
+                const materiasAlumno = mapCursadasPorDNI[dni] || [];
+                if (!studentInfo) return;
+
+                let anioAsignado = null;
+                for (let materia of materiasAlumno) {
+                    if (materia.toLowerCase().includes("instrumento") || materia.toLowerCase().includes("canto")) {
+                        const y = extractYearFromSubject(materia);
+                        if (y && y >= 1 && y <= 5) {
+                            if (!anioAsignado || y > anioAsignado) anioAsignado = y;
                         }
-                    };
+                    }
                 }
-
-                // Agrupar materias por DNI para análisis
-                const mapCursadasPorDNI = {};
-                cursadas.forEach(c => {
-                    if (!mapCursadasPorDNI[c.dni]) mapCursadasPorDNI[c.dni] = [];
-                    mapCursadasPorDNI[c.dni].push(c.materia);
-                });
-
-                const dnisUnicosCursando = Object.keys(mapCursadasPorDNI);
-
-                dnisUnicosCursando.forEach(dni => {
-                    const studentInfo = mapEstudiantes[dni];
-                    const materiasAlumno = mapCursadasPorDNI[dni] || [];
-                    
-                    if (!studentInfo) return; 
-
-                    // Determinar año
-                    let anioAsignado = null;
-                    
-                    // Buscar en troncales
+                if (!anioAsignado) {
                     for (let materia of materiasAlumno) {
-                        if (materia.toLowerCase().includes("instrumento") || materia.toLowerCase().includes("canto")) {
+                        if (materia.toLowerCase().includes("lenguaje musical")) {
                             const y = extractYearFromSubject(materia);
                             if (y && y >= 1 && y <= 5) {
                                 if (!anioAsignado || y > anioAsignado) anioAsignado = y;
                             }
                         }
                     }
-                    // Fallback a Lenguaje
-                    if (!anioAsignado) {
-                        for (let materia of materiasAlumno) {
-                            if (materia.toLowerCase().includes("lenguaje musical")) {
-                                const y = extractYearFromSubject(materia);
-                                if (y && y >= 1 && y <= 5) {
-                                    if (!anioAsignado || y > anioAsignado) anioAsignado = y;
-                                }
-                            }
-                        }
-                    }
+                }
 
-                    if (anioAsignado) {
-                        const row = matrix[anioAsignado];
-                        row.total++;
-                        if (studentInfo.genero === 'Masculino') row.masculinos++;
-                        
-                        const edad = calculateAge(studentInfo.fechanacimiento);
-                        const cat = getMatrixAgeCategory(edad);
-                        if (row.ages[cat] !== undefined) row.ages[cat]++;
-                    }
-                });
+                if (anioAsignado) {
+                    const row = matrix[anioAsignado];
+                    row.total++;
+                    if (studentInfo.genero === 'Masculino') row.masculinos++;
+                    const edad = calculateAge(studentInfo.fecha_nacimiento);
+                    const cat = getMatrixAgeCategory(edad);
+                    if (row.ages[cat] !== undefined) row.ages[cat]++;
+                }
+            });
 
-                setAgeMatrix(matrix);
+            setAgeMatrix(matrix);
 
-            } catch (error) {
-                console.error("Error:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (appId) fetchData();
-    }, [db, appId, currentYear]);
+        } catch (error) {
+            console.error("Error cargando informes:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (loading) return (
         <div className="flex items-center justify-center h-64">
@@ -271,21 +265,18 @@ const AdminInformes = ({ db, appId }) => {
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Informe Estadístico</h2>
             <p className="text-gray-500 mb-8">Ciclo Lectivo: {currentYear}</p>
 
-            {/* KPIs Resumen */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <StatCard title="Estudiantes Activos" value={stats.totalEstudiantes} color="indigo" />
                 <StatCard title="Matrículas (Instr.)" value={stats.totalMatriculados} color="blue" />
-                <StatCard title="Inscripciones Materias" value={stats.porMateria.reduce((a,b)=>a+b.count,0)} color="green" />
+                <StatCard title="Inscripciones Materias" value={stats.porMateria.reduce((a, b) => a + b.count, 0)} color="green" />
                 <StatCard title="Instrumentos" value={stats.porInstrumento.length} color="purple" />
             </div>
 
-            {/* SECCIÓN 1: MATRIZ DE EDADES (Lo nuevo y específico) */}
+            {/* Matriz de Edades */}
             <div className="bg-white rounded-xl shadow-lg border-2 border-indigo-100 overflow-hidden mb-12">
                 <div className="bg-indigo-50 p-6 border-b border-indigo-200">
                     <h3 className="text-xl font-bold text-indigo-900">Matrícula por Año de Estudio y Edad</h3>
-                    <p className="text-sm text-indigo-700 mt-1">
-                        Desagregación específica solicitada. Ubicación por: Instrumento/Canto o Lenguaje Musical.
-                    </p>
+                    <p className="text-sm text-indigo-700 mt-1">Desagregación específica por Instrumento o Lenguaje Musical.</p>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -323,14 +314,14 @@ const AdminInformes = ({ db, appId }) => {
                             <tr>
                                 <td className="px-4 py-3 border-r border-gray-300">TOTALES</td>
                                 <td className="px-4 py-3 text-center text-indigo-700 border-r border-gray-300">
-                                    {[1,2,3,4,5].reduce((acc, curr) => acc + (ageMatrix[curr]?.total || 0), 0)}
+                                    {[1, 2, 3, 4, 5].reduce((acc, curr) => acc + (ageMatrix[curr]?.total || 0), 0)}
                                 </td>
                                 <td className="px-4 py-3 text-center border-r border-gray-300">
-                                    {[1,2,3,4,5].reduce((acc, curr) => acc + (ageMatrix[curr]?.masculinos || 0), 0)}
+                                    {[1, 2, 3, 4, 5].reduce((acc, curr) => acc + (ageMatrix[curr]?.masculinos || 0), 0)}
                                 </td>
                                 {matrixColumns.map(age => (
                                     <td key={age} className="px-2 py-3 text-center text-gray-600 border-r border-gray-300">
-                                        {[1,2,3,4,5].reduce((acc, curr) => acc + (ageMatrix[curr]?.ages[age] || 0), 0)}
+                                        {[1, 2, 3, 4, 5].reduce((acc, curr) => acc + (ageMatrix[curr]?.ages[age] || 0), 0)}
                                     </td>
                                 ))}
                             </tr>
@@ -339,16 +330,12 @@ const AdminInformes = ({ db, appId }) => {
                 </div>
             </div>
 
-            {/* SECCIÓN 2: INFORMES GENERALES (Lo que tenías antes) */}
             <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Desglose General de Datos</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Columna Izquierda */}
                 <div className="space-y-8">
                     <DataTable title="Inscriptos por Instrumento" data={stats.porInstrumento} headers={["Instrumento"]} />
                     <DataTable title="Top 20 Materias Más Cursadas" data={stats.porMateria} headers={["Materia"]} />
                 </div>
-
-                {/* Columna Derecha */}
                 <div className="space-y-8">
                     <DataTable title="Distribución Demográfica por Edad" data={stats.porEdadGeneral} headers={["rango"]} />
                     <DataTable title="Por Género" data={stats.porGenero} headers={["genero"]} />

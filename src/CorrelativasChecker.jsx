@@ -1,48 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-    getFirestore, 
-    collection, 
-    query, 
-    where, 
-    getDocs
-} from 'firebase/firestore';
-import { 
-    getAuth,
-    signInAnonymously,
-    signInWithCustomToken,
-    onAuthStateChanged
-} from 'firebase/auth';
-
-// --- Configuración de Firebase ---
-const getFirebaseConfig = () => {
-    if (typeof __firebase_config !== 'undefined') {
-        return JSON.parse(__firebase_config);
-    } 
-    return {
-        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: import.meta.env.VITE_FIREBASE_APP_ID,
-        measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-    };
-};
-
-const firebaseConfig = getFirebaseConfig();
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+import { supabase } from './supabaseClient';
 
 // --- LÓGICA DE CORRELATIVAS ---
 
 const INSTRUMENTOS_530 = [
-    "Arpa", "Bajo Eléctrico", "Bandoneón", "Batería", "Clarinete", 
-    "Contrabajo", "Corno", "Flauta Dulce", "Flauta Traversa", 
-    "Guitarra Clásica", "Guitarra Eléctrica", "Guitarra Popular", 
-    "Oboe", "Percusión Académica", "Percusión Folklórica", 
-    "Piano", "Saxo", "Sikus-Quena", "Trombón", "Trompeta", 
+    "Arpa", "Bajo Eléctrico", "Bandoneón", "Batería", "Clarinete",
+    "Contrabajo", "Corno", "Flauta Dulce", "Flauta Traversa",
+    "Guitarra Clásica", "Guitarra Eléctrica", "Guitarra Popular",
+    "Oboe", "Percusión Académica", "Percusión Folklórica",
+    "Piano", "Saxo", "Sikus-Quena", "Trombón", "Trompeta",
     "Violín", "Viola", "Violoncello"
 ];
 
@@ -60,13 +26,12 @@ const CORRELATIVAS_FIJAS = {
     "Canto Popular 2": ["Canto Popular 1", "Lenguaje Musical 1"],
     "Dicción Portuguesa 2": ["Dicción Portuguesa 1"],
     "Canto Popular 3": ["Canto Popular 2", "Lenguaje Musical 2", "Ensamble 1"],
-    "Danzas Folklóricas": ["Expresión Corporal"], 
+    "Danzas Folklóricas": ["Expresión Corporal"],
     "Canto Popular 4": ["Canto Popular 3", "Lenguaje Musical 3", "Ensamble 2", "Apreciación Musical 1", "Danzas Folklóricas", "Dicción Inglesa 1", "Educación Vocal"],
     "Dicción Inglesa 2": ["Canto Popular 3", "Lenguaje Musical 3", "Ensamble 2", "Apreciación Musical 1", "Danzas Folklóricas", "Dicción Inglesa 1", "Educación Vocal"],
     "Canto Popular 5": ["Canto Popular 4", "Lenguaje Musical 4", "Ensamble 3"]
 };
 
-// Función auxiliar para normalizar texto
 const normalizarTexto = (texto) => {
     return texto.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -74,11 +39,11 @@ const normalizarTexto = (texto) => {
 };
 
 const getReglasPorPlan = (nombrePlan) => {
-    let reglas = { ...CORRELATIVAS_FIJAS }; 
+    let reglas = { ...CORRELATIVAS_FIJAS };
     let esPlan530 = false;
 
     const nombrePlanNorm = normalizarTexto(nombrePlan || "");
-    const instrumentoEncontrado = INSTRUMENTOS_530.find(inst => 
+    const instrumentoEncontrado = INSTRUMENTOS_530.find(inst =>
         nombrePlanNorm.includes(normalizarTexto(inst))
     );
 
@@ -107,9 +72,8 @@ const getReglasPorPlan = (nombrePlan) => {
         reglas["Apreciación Musical 1"] = [I1, "Lenguaje Musical 2"];
 
         // AÑO 4
-        // Ponemos ambas como requisito nominal. La lógica de "O" se hace en el análisis.
         const reqAno4 = [
-            I3, "Lenguaje Musical 3", "Ensamble 2", 
+            I3, "Lenguaje Musical 3", "Ensamble 2",
             "Apreciación Musical 1", "Expresión Corporal", "Danzas Folklóricas"
         ];
         reglas[I4] = reqAno4;
@@ -131,7 +95,7 @@ const getReglasPorPlan = (nombrePlan) => {
 };
 
 // --- COMPONENTE PRINCIPAL ---
-const CorrelativasChecker = ({ db, appId }) => {
+const CorrelativasChecker = () => {
     const [dni, setDni] = useState('');
     const [selectedPlan, setSelectedPlan] = useState('');
     const [availablePlans, setAvailablePlans] = useState([]);
@@ -142,66 +106,59 @@ const CorrelativasChecker = ({ db, appId }) => {
     const handleSearchStudent = async (e) => {
         e.preventDefault();
         if (!dni) return;
-        if (!db) { alert("Error de conexión con la base de datos."); return; }
 
         setSearching(true);
         setAnalysis(null);
         setAvailablePlans([]);
 
         try {
-            // 1. Buscar al alumno en matriculaciones
-            const matRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
-            const q = query(matRef, where("dni", "==", dni));
-            const snapshot = await getDocs(q);
+            // 1. Buscar al alumno en perfiles o matriculaciones
+            const { data: profile } = await supabase
+                .from('perfiles')
+                .select('*')
+                .eq('dni', dni)
+                .maybeSingle();
 
-            if (snapshot.empty) {
-                 // Fallback: buscar en estudiantes históricos
-                 const stRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-                 const qSt = query(stRef, where("dni", "==", dni));
-                 const snapSt = await getDocs(qSt);
+            if (!profile) {
+                alert("Estudiante no encontrado.");
+                setSearching(false);
+                return;
+            }
 
-                 if (snapSt.empty) {
-                    alert("Estudiante no encontrado.");
-                    setSearching(false);
-                    return;
-                 } else {
-                     const stData = snapSt.docs[0].data();
-                     setStudentName(`${stData.apellidos}, ${stData.nombres}`);
-                     
-                     // Buscar notas para inferir planes
-                     const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
-                     const qNotas = query(notasRef, where("dni", "==", dni));
-                     const snapNotas = await getDocs(qNotas);
-                     const planesInferidos = new Set();
-                     snapNotas.forEach(doc => planesInferidos.add(doc.data().plan));
-                     
-                     if (planesInferidos.size > 0) {
-                         setAvailablePlans(Array.from(planesInferidos));
-                         if (planesInferidos.size === 1) {
-                            const planUnico = Array.from(planesInferidos)[0];
-                            setSelectedPlan(planUnico);
-                            analyzeCorrelativas(dni, planUnico);
-                         }
-                     } else {
-                         alert("El estudiante existe pero no tiene historial suficiente.");
-                     }
-                 }
-            } else {
-                const planes = new Set();
-                let nombre = "";
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    planes.add(data.plan);
-                    nombre = `${data.apellidos}, ${data.nombres}`;
+            setStudentName(`${profile.apellido}, ${profile.nombre}`);
+
+            // 2. Buscar planes en los que está o estuvo matriculado
+            const { data: matriculaciones } = await supabase
+                .from('matriculaciones')
+                .select('plan')
+                .eq('estudiante_id', profile.id);
+
+            const planes = new Set(matriculaciones.map(m => m.plan));
+
+            // También buscar en notas por si acaso hay historial sin matriculación registrada
+            const { data: notasHist } = await supabase
+                .from('notas')
+                .select('matriculaciones(plan)')
+                .filter('matriculaciones.estudiante_id', 'eq', profile.id);
+
+            if (notasHist) {
+                notasHist.forEach(n => {
+                    if (n.matriculaciones?.plan) planes.add(n.matriculaciones.plan);
                 });
-                setStudentName(nombre);
-                setAvailablePlans(Array.from(planes));
-                
-                if (planes.size === 1) {
-                    const planUnico = Array.from(planes)[0];
-                    setSelectedPlan(planUnico);
-                    analyzeCorrelativas(dni, planUnico);
-                }
+            }
+
+            if (planes.size === 0) {
+                alert("El estudiante existe pero no tiene planes registrados.");
+                setSearching(false);
+                return;
+            }
+
+            setAvailablePlans(Array.from(planes));
+
+            if (planes.size === 1) {
+                const planUnico = Array.from(planes)[0];
+                setSelectedPlan(planUnico);
+                analyzeCorrelativas(profile.id, planUnico);
             }
         } catch (error) {
             console.error("Error:", error);
@@ -211,40 +168,35 @@ const CorrelativasChecker = ({ db, appId }) => {
         }
     };
 
-    const analyzeCorrelativas = async (dniTarget, planTarget) => {
+    const analyzeCorrelativas = async (studentId, planTarget) => {
         setSearching(true);
         try {
             const { reglas, esPlan530 } = getReglasPorPlan(planTarget);
 
             // A. Obtener TODAS las materias del plan
-            const materiasRef = collection(db, 'artifacts', appId, 'public', 'data', 'materias');
-            const qMaterias = query(materiasRef, where("plan", "==", planTarget));
-            const materiasSnap = await getDocs(qMaterias);
-            
-            const todasLasMateriasDelPlan = [];
-            materiasSnap.forEach(doc => {
-                todasLasMateriasDelPlan.push(doc.data().materia);
-            });
+            const { data: todasLasMateriasDelPlan } = await supabase
+                .from('materias')
+                .select('nombre')
+                .eq('plan', planTarget);
+
+            if (!todasLasMateriasDelPlan) throw new Error("No se encontraron materias para este plan");
 
             // B. Obtener materias APROBADAS
-            const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
-            const qNotas = query(
-                notasRef, 
-                where("dni", "==", dniTarget),
-                where("plan", "==", planTarget)
-            );
-            const notasSnap = await getDocs(qNotas);
-            
-            const aprobadas = new Set();
-            notasSnap.forEach(doc => {
-                const data = doc.data();
-                if (["Promoción", "Examen", "Equivalencia"].includes(data.condicion)) {
-                    aprobadas.add(data.materia); 
-                }
-            });
+            const { data: notasSnap } = await supabase
+                .from('notas')
+                .select('*, materias(nombre), matriculaciones(plan)')
+                .filter('matriculaciones.estudiante_id', 'eq', studentId)
+                .filter('matriculaciones.plan', 'eq', planTarget);
 
-            // --- LÓGICA DE MOVIMIENTO (PLAN 530) ---
-            // Si el plan es 530, tener aprobada UNA de las dos ya cuenta como tener "crédito de movimiento"
+            const aprobadas = new Set();
+            if (notasSnap) {
+                notasSnap.forEach(n => {
+                    if (["Promoción", "Examen", "Equivalencia"].includes(n.condicion)) {
+                        aprobadas.add(n.materias.nombre);
+                    }
+                });
+            }
+
             const tieneMovimiento = esPlan530 && (aprobadas.has("Expresión Corporal") || aprobadas.has("Danzas Folklóricas"));
 
             const reporte = {
@@ -253,36 +205,27 @@ const CorrelativasChecker = ({ db, appId }) => {
                 bloqueadas: []
             };
 
-            todasLasMateriasDelPlan.sort();
+            const sortedMaterias = todasLasMateriasDelPlan.map(m => m.nombre).sort();
 
-            todasLasMateriasDelPlan.forEach(materia => {
-                if (aprobadas.has(materia)) return; // Ya aprobada, ignorar
+            sortedMaterias.forEach(materia => {
+                if (aprobadas.has(materia)) return;
 
-                // --- FILTRO VISUAL DE DISPONIBILIDAD ---
-                // Si ya tiene movimiento aprobado, NO mostrar la otra materia como "pendiente" o "disponible"
                 if (esPlan530 && tieneMovimiento && (materia === "Expresión Corporal" || materia === "Danzas Folklóricas")) {
                     return;
                 }
 
                 const requisitos = reglas[materia] || [];
-                
+
                 if (requisitos.length === 0) {
-                    // No tiene correlativas -> Disponible
                     reporte.disponibles.push({ nombre: materia, motivo: "Sin correlativas" });
                 } else {
-                    // Verificar requisitos
                     const faltantes = requisitos.filter(req => {
-                        // --- VALIDACIÓN DE REQUISITOS ---
-                        // Si una materia pide "Expresión Corporal" o "Danzas", y tieneMovimiento es true,
-                        // entonces el requisito está cumplido (no falta).
                         if (esPlan530 && (req === "Expresión Corporal" || req === "Danzas Folklóricas")) {
-                            if (tieneMovimiento) return false; // No falta
+                            if (tieneMovimiento) return false;
                         }
-                        
-                        // Chequeo normal: si no está en aprobadas, falta.
                         return !aprobadas.has(req);
                     });
-                    
+
                     if (faltantes.length === 0) {
                         reporte.disponibles.push({ nombre: materia, motivo: "Correlativas completas" });
                     } else {
@@ -300,23 +243,30 @@ const CorrelativasChecker = ({ db, appId }) => {
         }
     };
 
-    const handleSelectPlan = (e) => {
+    const handleSelectPlan = async (e) => {
         const plan = e.target.value;
         setSelectedPlan(plan);
-        if (plan) analyzeCorrelativas(dni, plan);
+        if (plan) {
+            // Necesitamos el studentId de nuevo
+            const { data: profile } = await supabase
+                .from('perfiles')
+                .select('id')
+                .eq('dni', dni)
+                .single();
+            if (profile) analyzeCorrelativas(profile.id, plan);
+        }
     };
 
     return (
         <div id="correlativas_checker" className="w-full">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Verificador de Correlativas</h2>
             <p className="text-gray-600 mb-6">Consulte qué materias está habilitado a cursar un estudiante según su historia académica.</p>
-            
-            {/* Buscador */}
+
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 items-end">
                 <div className="flex-grow w-full">
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">DNI del Estudiante</label>
-                    <input 
-                        type="text" 
+                    <input
+                        type="text"
                         value={dni}
                         onChange={(e) => setDni(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearchStudent(e)}
@@ -324,7 +274,7 @@ const CorrelativasChecker = ({ db, appId }) => {
                         placeholder="Ej: 30123456"
                     />
                 </div>
-                <button 
+                <button
                     onClick={handleSearchStudent}
                     disabled={searching}
                     className="w-full md:w-auto bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-indigo-700 transition disabled:bg-gray-300 shadow-md"
@@ -333,25 +283,22 @@ const CorrelativasChecker = ({ db, appId }) => {
                 </button>
             </div>
 
-            {/* Selector de Plan */}
             {availablePlans.length > 1 && (
-                 <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mb-8 animate-fade-in">
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mb-8 animate-fade-in">
                     <p className="font-bold text-yellow-800 mb-2">⚠ El estudiante tiene múltiples planes. Seleccione uno:</p>
-                    <select 
-                        value={selectedPlan} 
+                    <select
+                        value={selectedPlan}
                         onChange={handleSelectPlan}
                         className="w-full p-2 border border-yellow-300 rounded bg-white"
                     >
                         <option value="">-- Seleccionar Plan --</option>
                         {availablePlans.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
-                 </div>
+                </div>
             )}
 
-            {/* Resultados */}
             {analysis && (
                 <div className="space-y-8">
-                    {/* Cabecera Alumno */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center">
                         <div>
                             <h2 className="text-2xl font-bold text-gray-800">{studentName}</h2>
@@ -365,7 +312,6 @@ const CorrelativasChecker = ({ db, appId }) => {
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-6">
-                        {/* Columna: DISPONIBLES */}
                         <div className="bg-white p-0 rounded-xl shadow-sm border border-green-200 overflow-hidden">
                             <div className="bg-green-50 p-4 border-b border-green-100 flex items-center">
                                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold mr-3 shadow-sm">✓</div>
@@ -393,7 +339,6 @@ const CorrelativasChecker = ({ db, appId }) => {
                             </div>
                         </div>
 
-                        {/* Columna: BLOQUEADAS */}
                         <div className="bg-white p-0 rounded-xl shadow-sm border border-red-200 overflow-hidden">
                             <div className="bg-red-50 p-4 border-b border-red-100 flex items-center">
                                 <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold mr-3 shadow-sm">X</div>
@@ -409,7 +354,7 @@ const CorrelativasChecker = ({ db, appId }) => {
                                             <li key={i} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm">
                                                 <div className="font-semibold text-gray-700 mb-1">{m.nombre}</div>
                                                 <div className="text-xs text-red-600 bg-red-50 p-2 rounded flex items-start gap-1">
-                                                    <span className="font-bold">Falta:</span> 
+                                                    <span className="font-bold">Falta:</span>
                                                     <span>{m.faltan.join(", ")}</span>
                                                 </div>
                                             </li>
@@ -425,7 +370,6 @@ const CorrelativasChecker = ({ db, appId }) => {
                         </div>
                     </div>
 
-                    {/* Historial */}
                     <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Historial de Aprobadas ({analysis.aprobadas.length})</h3>
                         {analysis.aprobadas.length > 0 ? (

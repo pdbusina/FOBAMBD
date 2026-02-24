@@ -1,27 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, 
-    signInAnonymously, 
-    onAuthStateChanged,
-    signInWithEmailAndPassword
-} from 'firebase/auth';
-import { 
-    getFirestore, 
-    doc, 
-    getDoc, 
-    addDoc, 
-    setDoc, 
-    updateDoc, 
-    deleteDoc, 
-    onSnapshot, 
-    collection, 
-    query, 
-    where, 
-    getDocs,
-    Timestamp,
-    setLogLevel
-} from 'firebase/firestore';
+import { supabase } from './supabaseClient';
 
 // --- IMPORTANTE: Componente Externo ---
 import CorrelativasChecker from './CorrelativasChecker';
@@ -29,19 +7,7 @@ import CursadosActivos from './CursadosActivos';
 import AdminHorarios from './AdminHorarios';
 import AdminInformes from './AdminInformes';
 // ---
-// Configuración Manual de Firebase
-// (Usando la configuración que pegaste)
-// ---
-const firebaseConfig = {
- apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
-// --- Fin de la Configuración Manual ---
+// --- Configuración Manual eliminada (Firebase -> Supabase) ---
 
 // --- Estilos de Impresión (Para Analítico) ---
 // --- (NUEVO) Estilos de Impresión (Combinados y Corregidos) ---
@@ -149,71 +115,70 @@ const printStyles = `
 
 // --- Componentes de Iconos (Mini SVGs) ---
 const IconUser = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
 );
 const IconAdmin = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h6m-3 0v14" /></svg>
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h6m-3 0v14" /></svg>
 );
 const IconCertificate = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
 );
 const IconReport = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
 );
 export const IconLoading = () => (
-  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
+    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
 );
 const IconPrint = () => (
-  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a2 2 0 01-2-2v-2H9v2a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2h-2z" /></svg>
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a2 2 0 01-2-2v-2H9v2a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2h-2z" /></svg>
 );
 
 
 // --- Componente de Mensajes (Toast) ---
 const Message = ({ text, isError, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
 
-  return (
-    <div className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-500' : 'bg-green-500'} no-print`}>
-      {text}
-    </div>
-  );
+    return (
+        <div className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-500' : 'bg-green-500'} no-print`}>
+            {text}
+        </div>
+    );
 };
 
 // --- Componente Botón de Acceso (Pantalla Principal) ---
 const AccessButton = ({ icon, title, description, onClick }) => (
-  <button
-    onClick={onClick}
-    className="flex items-center w-full p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition duration-300 ease-in-out border border-gray-200"
-  >
-    <div className="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-full bg-indigo-500 text-white shadow-md">
-      {icon}
-    </div>
-    <div className="ml-6 text-left">
-      <h3 className="text-2xl font-semibold text-gray-800">{title}</h3>
-      <p className="text-gray-500 mt-1">{description}</p>
-    </div>
-  </button>
+    <button
+        onClick={onClick}
+        className="flex items-center w-full p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition duration-300 ease-in-out border border-gray-200"
+    >
+        <div className="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-full bg-indigo-500 text-white shadow-md">
+            {icon}
+        </div>
+        <div className="ml-6 text-left">
+            <h3 className="text-2xl font-semibold text-gray-800">{title}</h3>
+            <p className="text-gray-500 mt-1">{description}</p>
+        </div>
+    </button>
 );
 
 // --- Componente Botón de Pestaña (Admin) ---
 // (ESTILO ACTUALIZADO)
 const TabButton = ({ id, label, isActive, onClick }) => (
-  <button
-    onClick={() => onClick(id)}
-    className={`px-3 py-2 md:px-4 md:py-2 text-sm md:text-base font-medium rounded-md transition duration-200 mx-1 mb-1 ${
-      isActive
-        ? 'bg-indigo-600 text-white shadow-sm'
-        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
-    }`}
-  >
-    {label}
-  </button>
+    <button
+        onClick={() => onClick(id)}
+        className={`px-3 py-2 md:px-4 md:py-2 text-sm md:text-base font-medium rounded-md transition duration-200 mx-1 mb-1 ${isActive
+            ? 'bg-indigo-600 text-white shadow-sm'
+            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+            }`}
+    >
+        {label}
+    </button>
 );
 
 // Objeto base para el formulario de estudiante
@@ -224,444 +189,238 @@ const defaultStudentData = {
 
 // --- Componente Principal ---
 export default function App() {
-  const [db, setDb] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [students, setStudents] = useState([]);
-  const [instrumentos, setInstrumentos] = useState([]); // Para tabla Instrumentos
-  const [matriculaciones, setMatriculaciones] = useState([]);
-  const [materias, setMaterias] = useState([]); // Para tabla Materias
-  const [notas, setNotas] = useState([]); // (NUEVO) Para tabla Notas
-  const [loading, setLoading] = useState(true);
-  // (AJUSTE) Añadir 'student_analitico'
-  const [appState, setAppState] = useState('landing'); // 'landing', 'student_access', 'student_analitico', 'admin_login', 'admin_dashboard'
-  const [activeTab, setActiveTab] = useState('inscribir'); // Pestaña inicial de admin
-  const [notasSubTab, setNotasSubTab] = useState('ingresar_nota'); // Para sub-pestañas de notas
-  const [message, setMessage] = useState({ text: "", isError: false });
-  const [debugInfo, setDebugInfo] = useState({ projectId: null, authStatus: "Idle" });
-  const [userClaims, setUserClaims] = useState(null);
-  
-  // App ID (calculado desde la config)
-  const appId = useMemo(() => firebaseConfig.projectId || "default-app-id", [firebaseConfig]);
+    const [userId, setUserId] = useState(null);
+    const [students, setStudents] = useState([]);
+    const [instrumentos, setInstrumentos] = useState([]);
+    const [matriculaciones, setMatriculaciones] = useState([]);
+    const [materias, setMaterias] = useState([]);
+    const [notas, setNotas] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [appState, setAppState] = useState('landing');
+    const [activeTab, setActiveTab] = useState('inscribir');
+    const [notasSubTab, setNotasSubTab] = useState('ingresar_nota');
+    const [message, setMessage] = useState({ text: "", isError: false });
+    const [debugInfo, setDebugInfo] = useState({ projectId: 'Supabase', authStatus: "Iniciando..." });
+    const [userClaims, setUserClaims] = useState(null);
 
-  // --- Inicialización y Autenticación ---
-  useEffect(() => {
-    // Activar logs detallados de Firestore
-    // setLogLevel('debug');
-
-    try {
-      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "SU_API_KEY") {
-        throw new Error("Configuración de Firebase no encontrada. Por favor, pegue su 'firebaseConfig' al inicio de App.jsx.");
-      }
-      
-      const app = initializeApp(firebaseConfig);
-      const firestore = getFirestore(app);
-      const userAuth = getAuth(app);
-      
-      setDb(firestore);
-      setDebugInfo(prev => ({ ...prev, projectId: app.options.projectId }));
-
-      // Listener de Autenticación
-    const unsubscribeAuth = onAuthStateChanged(userAuth, async (user) => { // <-- 1. Añadido 'async'
-      if (user) {
-        // Usuario autenticado
-        setUserId(user.uid);
-
-        // --- (NUEVO) Obtener "claims" (credenciales) del token ---
-        try {
-          // 1. Pedir el token y sus claims
-          const idTokenResult = await user.getIdTokenResult();
-          const claims = idTokenResult.claims;
-          
-          // 2. Guardar los claims en el estado de React (asume que ya creaste el estado 'userClaims')
-          setUserClaims(claims); 
-
-          // 3. Actualizar el debugInfo con el rol (si existe)
-          const authType = user.isAnonymous ? "Anónimo" : "Email/Pass";
-          // (Por ahora 'role' saldrá vacío, pero leerá 'super_admin' en el futuro)
-          const role = claims.super_admin ? "SuperAdmin" : (claims.admin ? "Admin" : (user.isAnonymous ? "Anónimo" : "Usuario"));
-          setDebugInfo(prev => ({ ...prev, authStatus: `Autenticado (${authType} - Rol: ${role})` }));
-
-        } catch (error) {
-          console.error("Error al obtener claims:", error);
-          setDebugInfo(prev => ({ ...prev, authStatus: "Error obteniendo claims" }));
-        }
-        // --- Fin del bloque nuevo ---
-
-        setLoading(false); // Indicar que la app ya puede mostrarse
-
-      } else {
-        // No hay usuario (sesión cerrada), intentar autenticación anónima
-        setDebugInfo(prev => ({ ...prev, authStatus: "Autenticando (Anónimo)..." }));
-        
-        setUserClaims(null); // <-- (NUEVO) Limpiar los claims al cerrar sesión
-
-        signInAnonymously(userAuth).catch((error) => {
-          console.error("Error en signInAnonymously:", error);
-          if (error.code === 'auth/configuration-not-found') {
-              setMessage({ text: "Error: 'Inicio de sesión Anónimo' no está habilitado en Firebase.", isError: true });
-              setDebugInfo(prev => ({ ...prev, authStatus: "Error: Auth Anónimo deshabilitado." }));
-          } else {
-              setMessage({ text: `Error de autenticación: ${error.message}`, isError: true });
-              setDebugInfo(prev => ({ ...prev, authStatus: `Error: ${error.code}` }));
-          }
+    // --- 1. Autenticación ---
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+                setUserId(session.user.id);
+                setUserClaims(session.user.user_metadata);
+                setDebugInfo(prev => ({ ...prev, authStatus: `Autenticado - Rol: ${session.user.user_metadata.role || 'Usuario'}` }));
+            }
+            setLoading(false);
         });
-      }
-    });
-      
-      return () => unsubscribeAuth();
 
-    } catch (error) {
-      console.error("Error de inicialización de Firebase:", error);
-      setMessage({ text: error.message, isError: true });
-      setLoading(false);
-      setDebugInfo(prev => ({ ...prev, authStatus: "Error de Configuración" }));
-    }
-  }, [firebaseConfig]);
-
-
-  // --- Definición de snapshotToArray DENTRO de App ---
-  // Convertir snapshot a Array (con ID)
-  const snapshotToArray = (snapshot) => {
-      const array = [];
-      snapshot.forEach(doc => {
-          array.push({ id: doc.id, ...doc.data() });
-      });
-      return array;
-  };
-
-
-  // --- Listener de Firestore (Real-Time) ---
-  // (AJUSTADO) Estos listeners ahora cargan siempre, no solo en admin
-  useEffect(() => {
-    // Se activa en cuanto hay BDD y Usuario
-    if (!db || !userId) return;
-
-    // Camino base a la data (para cumplir con reglas de seguridad)
-    const dataBasePath = ['artifacts', appId, 'public', 'data'];
-
-    // Listener para Estudiantes
-    const studentsQuery = query(collection(db, ...dataBasePath, 'students'));
-    const unsubscribeStudents = onSnapshot(studentsQuery, (snapshot) => {
-      const studentData = snapshotToArray(snapshot);
-      studentData.sort((a, b) => {
-        const apellidoA = (a.apellidos || "").toLowerCase();
-        const apellidoB = (b.apellidos || "").toLowerCase();
-    
-        // Si los apellidos son distintos, ordena por apellido
-        if (apellidoA < apellidoB) return -1;
-        if (apellidoA > apellidoB) return 1;
-    
-        // Si son iguales, desempatar por nombre
-        const nombreA = (a.nombres || "").toLowerCase();
-        const nombreB = (b.nombres || "").toLowerCase();
-        if (nombreA < nombreB) return -1;
-        if (nombreA > nombreB) return 1;
-    
-         return 0;
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session) {
+                setUserId(session.user.id);
+                setUserClaims(session.user.user_metadata);
+                setDebugInfo(prev => ({ ...prev, authStatus: `Autenticado - Rol: ${session.user.user_metadata.role || 'Usuario'}` }));
+            } else {
+                setUserId(null);
+                setUserClaims(null);
+                setDebugInfo(prev => ({ ...prev, authStatus: "Sesión cerrada" }));
+            }
         });
-      setStudents(studentData);
-    }, (error) => {
-      console.error("Error al cargar estudiantes:", error);
-      showMessage(`Error al cargar estudiantes: ${error.message}`, true);
-    });
 
-    // Listener para Instrumentos
-    const instrumentosQuery = query(collection(db, ...dataBasePath, 'instrumentos'));
-    const unsubscribeInstrumentos = onSnapshot(instrumentosQuery, (snapshot) => {
-      const data = snapshotToArray(snapshot);
-      data.sort((a, b) => (a.instrumento || "").localeCompare(b.instrumento || ""));
-      setInstrumentos(data);
-    }, (error) => {
-      console.error("Error al cargar instrumentos:", error);
-      showMessage(`Error al cargar instrumentos: ${error.message}`, true);
-    });
+        return () => subscription.unsubscribe();
+    }, []);
 
-    // Listener para Matriculaciones (Carga TODAS las matriculaciones)
-    const matriculationQuery = query(
-        collection(db, ...dataBasePath, 'matriculation')
-    );
-    
-    const unsubscribeMatriculaciones = onSnapshot(matriculationQuery, (snapshot) => {
-        const data = snapshotToArray(snapshot);
-        data.sort((a, b) => (a.apellidos || "").localeCompare(b.apellidos || ""));
-        setMatriculaciones(data);
-    }, (error) => {
-        console.error("Error al cargar matriculaciones:", error);
-        showMessage(`Error al cargar matriculaciones: ${error.message}`, true);
-    });
-    
-    // Listener para Materias
-    const materiasQuery = query(collection(db, ...dataBasePath, 'materias'));
-    const unsubscribeMaterias = onSnapshot(materiasQuery, (snapshot) => {
-        const data = snapshotToArray(snapshot);
-         // (AJUSTADO) Ordenar por plan, luego por año, luego por materia
-        data.sort((a, b) => {
-            const planA = a.plan || "";
-            const planB = b.plan || "";
-            const anioA = Number(a.anio) || 0;
-            const anioB = Number(b.anio) || 0;
-            const matA = a.materia || "";
-            const matB = b.materia || "";
+    // --- 2. Carga de Datos ---
+    useEffect(() => {
+        if (!userId) return;
 
-            if (planA < planB) return -1;
-            if (planA > planB) return 1;
-            if (anioA < anioB) return -1;
-            if (anioA > anioB) return 1;
-            if (matA < matB) return -1;
-            if (matA > matB) return 1;
-            return 0;
-        });
-        setMaterias(data);
-    }, (error) => {
-        console.error("Error al cargar materias:", error);
-        showMessage(`Error al cargar materias: ${error.message}`, true);
-    });
-    
-    // Listener para Notas
-    const notasQuery = query(collection(db, ...dataBasePath, 'notas'));
-    const unsubscribeNotas = onSnapshot(notasQuery, (snapshot) => {
-        const data = snapshotToArray(snapshot);
-        setNotas(data);
-    }, (error) => {
-        console.error("Error al cargar notas:", error);
-        showMessage(`Error al cargar notas: ${error.message}`, true);
-    });
+        const loadData = async () => {
+            // Perfiles
+            const { data: profiles } = await supabase.from('perfiles').select('*');
+            if (profiles) {
+                setStudents(profiles.map(p => ({
+                    id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
+                    email: p.email, direccion: p.direccion, ciudad: p.ciudad,
+                    telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
+                    nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
+                })).sort((a, b) => (a.apellidos || "").localeCompare(b.apellidos || "")));
+            }
 
+            // Instrumentos
+            const { data: inst } = await supabase.from('instrumentos').select('*');
+            if (inst) {
+                setInstrumentos(inst.map(i => ({
+                    id: i.id,
+                    instrumento: i.nombre,
+                    plan: i.plan
+                })).sort((a, b) => a.instrumento.localeCompare(b.instrumento)));
+            }
 
-    // Función de limpieza al desmontar
-    return () => {
-      unsubscribeStudents();
-      unsubscribeInstrumentos();
-      unsubscribeMatriculaciones();
-      unsubscribeMaterias();
-      unsubscribeNotas(); 
+            // Materias
+            const { data: mats } = await supabase.from('materias').select('*');
+            if (mats) {
+                setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
+            }
+
+            // Matriculaciones
+            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles(dni, apellido, nombre)');
+            if (matric) {
+                setMatriculaciones(matric.map(m => ({
+                    id: m.id, dni: m.perfiles?.dni, apellidos: m.perfiles?.apellido, nombres: m.perfiles?.nombre,
+                    plan: m.plan, cicloLectivo: m.ciclo_lectivo, instrumento: m.instrumento_id
+                })));
+            }
+
+            // Notas
+            const { data: nts } = await supabase.from('notas').select('*, matriculaciones(perfiles(dni)), materias(nombre)');
+            if (nts) {
+                setNotas(nts.map(n => ({
+                    id: n.id, dni: n.matriculaciones?.perfiles?.dni, materia: n.materias?.nombre,
+                    nota: n.calificacion, condicion: n.condicion, fecha: n.fecha,
+                    libro_folio: n.libro_folio, observaciones: n.observaciones, obs_optativa_ensamble: n.obs_detalle
+                })));
+            }
+        };
+
+        loadData();
+    }, [userId]);
+
+    // --- 3. Utilidades y Navegación ---
+    const showMessage = (text, isError) => setMessage({ text, isError });
+    const navigateTo = (screen) => setAppState(screen);
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+        if (tabId !== 'notas') setNotasSubTab('ingresar_nota');
     };
-  }, [db, userId, appId]); // (AJUSTADO) Ya no depende de appState
 
+    // Funciones placeholders
+    const addStudent = async (formData) => {
+        try {
+            // (ADVERTENCIA) Insertamos en perfiles. 
+            // Si el ID no está en auth.users fallará por el FK definido en el esquema.
+            // Para una migración real, se recomienda crear primero el usuario en auth.users.
+            const { error } = await supabase
+                .from('perfiles')
+                .insert([{
+                    dni: formData.dni,
+                    apellido: formData.apellidos,
+                    nombre: formData.nombres,
+                    email: formData.email,
+                    direccion: formData.direccion,
+                    ciudad: formData.ciudad,
+                    telefono: formData.telefono,
+                    telefono_urgencias: formData.telefonourgencias,
+                    nacionalidad: formData.nacionalidad,
+                    genero: formData.genero,
+                    fecha_nacimiento: formData.fechanacimiento
+                }]);
 
-  // --- Funciones de Utilidad ---
-  
-  // Mostrar mensaje
-  const showMessage = (text, isError) => {
-    setMessage({ text, isError });
-  };
-  
-  // --- CRUD Estudiantes ---
-  
-  // Camino base a la colección de estudiantes
-  const getStudentsColRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'students');
-  const getStudentDocRef = (id) => doc(db, 'artifacts', appId, 'public', 'data', 'students', id);
-  
-  const addStudent = async (newStudentData) => {
-    try {
-      await addDoc(getStudentsColRef(), {
-        ...newStudentData,
-        timestamp: Timestamp.now()
-      });
-      showMessage("Estudiante inscrito exitosamente.", false);
-    } catch (error) {
-      console.error("Error al agregar estudiante:", error);
-      showMessage(`Error: ${error.message}`, true);
-    }
-  };
-
-  const updateStudent = async (id, updatedData) => {
-    try {
-      await setDoc(getStudentDocRef(id), updatedData, { merge: true });
-      showMessage("Datos del estudiante actualizados.", false);
-    } catch (error) {
-      console.error("Error al actualizar estudiante:", error);
-      showMessage(`Error al actualizar estudiante: ${error.message}`, true);
-    }
-  };
-  
-  const deleteStudent = async (id, nombre) => {
-    // ELIMINADO: Confirmación
-    try {
-      await deleteDoc(getStudentDocRef(id));
-      showMessage(`Estudiante ${nombre} eliminado.`, false);
-    } catch (error) {
-      console.error("Error al eliminar estudiante:", error);
-      showMessage(`Error al eliminar estudiante: ${error.message}`, true);
-    }
-  };
-  // --- Fin CRUD Estudiantes ---
-
-
-  // CRUD Materias
-  const deleteMateria = async (id, nombre) => {
-      // ELIMINADO: Confirmación
-      try {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'materias', id);
-          await deleteDoc(docRef);
-          showMessage("Materia eliminada.", false);
-      } catch (error) {
-          console.error("Error al eliminar materia:", error);
-          showMessage(`Error: ${error.message}`, true);
-      }
-  };
-
-
-  // --- Navegación ---
-  const navigateTo = (screen) => setAppState(screen);
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
-    // Si salimos de la pestaña de notas, reseteamos la sub-pestaña
-    if (tabId !== 'notas') {
-      setNotasSubTab('ingresar_nota');
-    }
-  };
-
-  // --- Renderizado Condicional ---
-  
-  if (loading && !debugInfo.projectId) {
-    return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700 no-print">
-            <IconLoading />
-            <span className="text-xl ml-3">Cargando Configuración...</span>
-        </div>
-    );
-  }
-
-  // Si hay un error de configuración manual
-  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "SU_API_KEY") {
-      return (
-          <div className="flex items-center justify-center min-h-screen bg-red-100 p-8 no-print">
-              <div className="max-w-2xl bg-white p-10 rounded-lg shadow-xl border border-red-300 text-center">
-                  <h1 className="text-3xl font-bold text-red-700 mb-4">Error de Configuración</h1>
-                  <p className="text-lg text-gray-800">No se ha encontrado la configuración de Firebase.</p>
-                  <p className="text-gray-600 mt-4">
-                      Por favor, siga estos pasos:
-                  </p>
-                  <ol className="text-left list-decimal list-inside mt-4 space-y-2">
-                      <li>Vaya a su <strong>Consola de Firebase</strong>.</li>
-                      <li>Haga clic en <strong>Configuración del Proyecto</strong> (⚙️).</li>
-                      <li>Vaya a <strong>Tus apps</strong> &gt; <strong>App Web</strong>.</li>
-                      <li>Copie el objeto <code>firebaseConfig</code>.</li>
-                      <li>Pegue ese objeto al inicio del archivo <code>App.jsx</code> (reemplazando el de ejemplo).</li>
-                  </ol>
-              </div>
-          </div>
-      );
-  }
-  
-  // Si hay un error de autenticación (Anónimo no habilitado)
-  if (debugInfo.authStatus === "Error: Auth Anónimo deshabilitado.") {
-      return (
-          <div className="flex items-center justify-center min-h-screen bg-yellow-100 p-8 no-print">
-              <div className="max-w-2xl bg-white p-10 rounded-lg shadow-xl border border-yellow-400 text-center">
-                  <h1 className="text-3xl font-bold text-yellow-800 mb-4">Acción Requerida</h1>
-                  <p className="text-lg text-gray-800">La conexión con <code>{debugInfo.projectId}</code> fue exitosa, pero se requiere un paso más.</p>
-                  <p className="text-gray-600 mt-4">
-                      Para continuar, debe habilitar el inicio de sesión <strong>Anónimo</strong>:
-                  </p>
-                  <ol className="text-left list-decimal list-inside mt-4 space-y-2">
-                      <li>Vaya a su <strong>Consola de Firebase</strong>.</li>
-                      <li>Haga clic en <strong>Authentication</strong> (Menú Compilación).</li>
-                      <li>Haga clic en la pestaña <strong>Sign-in method</strong>.</li>
-                      <li>Busque <strong>Anónimo</strong> en la lista y habilítelo.</li>
-                      <li>Guarde y <strong>refresque esta página</strong>.</li>
-                  </ol>
-              </div>
-          </div>
-      );
-  }
-
-  // Pantalla de carga principal
-  if (loading) {
-     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700 no-print">
-            <IconLoading />
-            <span className="text-xl ml-3">Conectando con {debugInfo.projectId}...</span>
-        </div>
-    );
-  }
-
-  // Renderizado de la App (Router)
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* (AJUSTADO) Estilos de impresión globales */}
-      <style>{printStyles}</style>
-      
-      {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
-      
-      {/* Caja de Debug (Desaparece si el ID es el de ejemplo) */}
-      {/*
-      {debugInfo.projectId && debugInfo.projectId !== "SU_PROJECT_ID" && (
-         <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 text-sm text-center no-print">
-           <p><strong>ID del Proyecto (App):</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.projectId}</span></p>
-           <p><strong>Estado Auth:</strong> <span className="font-mono bg-yellow-200 px-2 py-1 rounded">{debugInfo.authStatus}</span></p>
-         </div>
-      )}
-      */}
-
-      {/* (NUEVO) Div de impresión para Certificado */}
-      <div id="certificate-print-area" className="print-area"></div>
-
-      {/* Router de Pantallas */}
-      <div className="no-print">
-        {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}
-        {appState === 'student_access' && 
-            <StudentAccessScreen 
-                navigateTo={navigateTo} 
-                db={db} 
-                appId={appId} 
-                showMessage={showMessage}
-                // (AJUSTADO) Pasar listas de 'students' y 'matriculaciones'
-                students={students}
-                matriculaciones={matriculaciones}
-            />
+            if (error) throw error;
+            showMessage("Estudiante inscrito exitosamente.", false);
+        } catch (error) {
+            console.error("Error al inscribir estudiante:", error);
+            showMessage(`Error al inscribir: ${error.message}`, true);
         }
-        
-        {/* (MOVIDO) La pantalla 'student_analitico' se movió fuera de este div 'no-print' 
-          para permitir que la impresión funcione.
-        */}
-        
-        {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
-      </div>
-      
-      {/* El Dashboard se maneja fuera del 'no-print' principal para que el analítico pueda imprimirse */}
-      {appState === 'admin_dashboard' && (
-        <AdminDashboardScreen
-          userClaims={userClaims}
-          navigateTo={navigateTo}
-          activeTab={activeTab}
-          handleTabChange={handleTabChange}
-          showMessage={showMessage}
-          db={db}
-          userId={userId}
-          appId={appId}
-          students={students}
-          instrumentos={instrumentos}
-          addStudent={addStudent}
-          updateStudent={updateStudent}
-          deleteStudent={deleteStudent}
-          matriculaciones={matriculaciones}
-          materias={materias}
-          notas={notas} 
-          deleteMateria={deleteMateria} 
-          notasSubTab={notasSubTab}
-          setNotasSubTab={setNotasSubTab}
-          snapshotToArray={snapshotToArray}
-        />
-      )}
+    };
 
-      {/* --- (NUEVA UBICACIÓN) --- */}
-      {/* El Analítico de Estudiante se renderiza aquí (fuera de 'no-print') */}
-      {appState === 'student_analitico' && 
-          <StudentAnaliticoScreen 
-              navigateTo={navigateTo}
-              showMessage={showMessage}
-              students={students}
-              matriculaciones={matriculaciones}
-              materias={materias}
-              notas={notas}
-          />
-      }
-      {/* --- FIN DE LA NUEVA UBICACIÓN --- */}
+    const updateStudent = async (id, dataToUpdate) => {
+        try {
+            const { error } = await supabase
+                .from('perfiles')
+                .update({
+                    dni: dataToUpdate.dni,
+                    apellido: dataToUpdate.apellidos,
+                    nombre: dataToUpdate.nombres,
+                    email: dataToUpdate.email,
+                    direccion: dataToUpdate.direccion,
+                    ciudad: dataToUpdate.ciudad,
+                    telefono: dataToUpdate.telefono,
+                    telefono_urgencias: dataToUpdate.telefonourgencias,
+                    nacionalidad: dataToUpdate.nacionalidad,
+                    genero: dataToUpdate.genero,
+                    fecha_nacimiento: dataToUpdate.fechanacimiento
+                })
+                .eq('id', id);
 
-    </div>
-  );
+            if (error) throw error;
+            showMessage("Datos del estudiante actualizados.", false);
+        } catch (error) {
+            console.error("Error al actualizar estudiante:", error);
+            showMessage(`Error: ${error.message}`, true);
+        }
+    };
+
+    const deleteStudent = async (id, nombre) => {
+        if (!window.confirm(`¿Seguro que desea eliminar permanentemente a ${nombre}?`)) return;
+        try {
+            const { error } = await supabase
+                .from('perfiles')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            showMessage("Estudiante eliminado.", false);
+        } catch (error) {
+            console.error("Error al eliminar estudiante:", error);
+            showMessage(`Error: ${error.message}`, true);
+        }
+    };
+
+    const deleteMateria = async (id, nombre) => {
+        if (!window.confirm(`¿Seguro que desea eliminar ${nombre}?`)) return;
+        try {
+            const { error } = await supabase.from('materias').delete().eq('id', id);
+            if (error) throw error;
+            showMessage("Materia eliminada.", false);
+        } catch (error) {
+            console.error("Error al eliminar materia:", error);
+            showMessage(`Error: ${error.message}`, true);
+        }
+    };
+    const snapshotToArray = (snap) => snap;
+
+    if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-100"><IconLoading /><span className="ml-3">Cargando...</span></div>;
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <style>{printStyles}</style>
+            {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
+
+            <div id="certificate-print-area" className="print-area"></div>
+
+            <div className="no-print">
+                {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}
+                {appState === 'student_access' &&
+                    <StudentAccessScreen
+                        navigateTo={navigateTo}
+                        showMessage={showMessage}
+                        students={students}
+                        matriculaciones={matriculaciones}
+                    />
+                }
+                {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
+            </div>
+
+            {appState === 'admin_dashboard' && (
+                <AdminDashboardScreen
+                    userClaims={userClaims} navigateTo={navigateTo} activeTab={activeTab}
+                    handleTabChange={handleTabChange} showMessage={showMessage}
+                    userId={userId} students={students} instrumentos={instrumentos}
+                    addStudent={addStudent} updateStudent={updateStudent} deleteStudent={deleteStudent}
+                    matriculaciones={matriculaciones} materias={materias} notas={notas}
+                    deleteMateria={deleteMateria} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab}
+                    snapshotToArray={snapshotToArray}
+                />
+            )}
+
+            {appState === 'student_analitico' &&
+                <StudentAnaliticoScreen
+                    navigateTo={navigateTo} showMessage={showMessage}
+                    students={students} matriculaciones={matriculaciones}
+                    materias={materias} notas={notas}
+                />
+            }
+        </div>
+    );
 }
 
 // -----------------------------------------------------------------
@@ -673,37 +432,35 @@ export default function App() {
  * (ESTILO ACTUALIZADO)
  */
 const LandingScreen = ({ navigateTo }) => (
-  <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-100">
-    <header className="text-center mb-12">
-      
-      {/* --- NUEVO --- */}
-      <img src="/logo.png" alt="Logo Escuela" className="w-24 h-auto mx-auto mb-4" />
-      {/* --- FIN NUEVO --- */}
+    <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-100">
+        <header className="text-center mb-12">
 
-      <h1 className="text-5xl font-bold text-gray-800 tracking-tight">Sistema de Gestión Estudiantil</h1>
-      <h2 className="text-3xl font-semibold text-indigo-600 mt-2">FOBAM</h2>
-      <p className="text-xl text-gray-600 mt-4">Escuela Superior de Música de Neuquén</p>
-    </header>
-    <main className="w-full max-w-2xl space-y-8">
-      {/*}
-      <AccessButton
-        icon={<IconUser />}
-        title="Estudiante"
-        description="Consultar certificados y rendimiento académico."
-        onClick={() => navigateTo('student_access')}
-      />
-        */}
-      <AccessButton
-        icon={<IconAdmin />}
-        title="Administrativo"
-        description="Gestión de estudiantes, matrículas y notas."
-        onClick={() => navigateTo('admin_login')}
-      />
-    </main>
-    <footer className="mt-16 text-gray-500">
-      FOBAMedusis © {new Date().getFullYear()}
-    </footer>
-  </div>
+            {/* --- NUEVO --- */}
+            <img src="/logo.png" alt="Logo Escuela" className="w-24 h-auto mx-auto mb-4" />
+            {/* --- FIN NUEVO --- */}
+
+            <h1 className="text-5xl font-bold text-gray-800 tracking-tight">Sistema de Gestión Estudiantil</h1>
+            <h2 className="text-3xl font-semibold text-indigo-600 mt-2">FOBAM</h2>
+            <p className="text-xl text-gray-600 mt-4">Escuela Superior de Música de Neuquén</p>
+        </header>
+        <main className="w-full max-w-2xl space-y-8">
+            <AccessButton
+                icon={<IconUser />}
+                title="Estudiante"
+                description="Consultar certificados y rendimiento académico."
+                onClick={() => navigateTo('student_access')}
+            />
+            <AccessButton
+                icon={<IconAdmin />}
+                title="Administrativo"
+                description="Gestión de estudiantes, matrículas y notas."
+                onClick={() => navigateTo('admin_login')}
+            />
+        </main>
+        <footer className="mt-16 text-gray-500">
+            FOBAMedusis © {new Date().getFullYear()}
+        </footer>
+    </div>
 );
 
 
@@ -717,7 +474,7 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
     const [studentInfo, setStudentInfo] = useState(null); // { dni, nombres, apellidos, genero }
     const [foundPlans, setFoundPlans] = useState([]); // [plan1, plan2]
     const [selectedPlan, setSelectedPlan] = useState('');
-    
+
     // Función para buscar DNI (en lugar de 'handleCertificateRequest')
     const handleDniSearch = async (e) => {
         e.preventDefault();
@@ -726,11 +483,11 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
 
         setIsLoading(true);
         const currentYear = new Date().getFullYear().toString();
-        
+
         try {
             // 1. Buscar Matriculaciones (usando la lista global)
-            const matriculasDelDNI = matriculaciones.filter(m => 
-                m.dni === dni && 
+            const matriculasDelDNI = matriculaciones.filter(m =>
+                m.dni === dni &&
                 m.cicloLectivo === currentYear
             );
 
@@ -741,9 +498,9 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
 
             // 2. Buscar Info del Estudiante (usando la lista global)
             const studentData = students.find(s => s.dni === dni);
-            
+
             const firstMatricula = matriculasDelDNI[0];
-            
+
             setStudentInfo({
                 dni: firstMatricula.dni,
                 nombres: firstMatricula.nombres,
@@ -753,7 +510,7 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
 
             // 3. Procesar planes
             const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
-            
+
             if (planesUnicos.length > 1) {
                 setFoundPlans(planesUnicos);
                 setStep(2); // Ir a selección de plan
@@ -761,7 +518,7 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
                 setSelectedPlan(planesUnicos[0]);
                 setStep(3); // Ir directo al certificado
             }
-            
+
         } catch (error) {
             console.error("Error buscando matrícula:", error);
             showMessage(`Error al consultar los datos: ${error.message}`, true);
@@ -769,7 +526,7 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
             setIsLoading(false);
         }
     };
-    
+
     // (NUEVO) Manejar selección de plan
     const handlePlanSelect = (plan) => {
         setSelectedPlan(plan);
@@ -784,94 +541,94 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
         setFoundPlans([]);
         setSelectedPlan('');
     };
-    
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-gray-100">
-        <header className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-800">Portal Estudiante</h1>
-          <p className="text-lg text-gray-600 mt-2">Consulte su información académica.</p>
-        </header>
+        <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-gray-100">
+            <header className="text-center mb-10">
+                <h1 className="text-4xl font-bold text-gray-800">Portal Estudiante</h1>
+                <p className="text-lg text-gray-600 mt-2">Consulte su información académica.</p>
+            </header>
 
-        <main className="w-full max-w-lg p-8 bg-white rounded-xl shadow-lg border border-gray-200">
-            
-            {/* Paso 1: Pedir DNI */}
-            {step === 1 && (
-                <div>
-                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Certificado de Alumno Regular</h2>
-                    <form onSubmit={handleDniSearch} className="space-y-4">
-                        <div>
-                            <label htmlFor="dni_student" className="block text-sm font-medium text-gray-700">Ingrese su DNI (sin puntos)</label>
-                            <input 
-                                type="text" 
-                                id="dni_student"
-                                value={dni}
-                                onChange={(e) => setDni(e.target.value)}
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
-                                placeholder="Ej: 30123456"
-                                required
-                            />
-                        </div>
-                        <button 
-                            type="submit" 
-                            disabled={isLoading}
-                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
-                        >
-                            {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
-                            {isLoading ? "Buscando..." : "Solicitar Certificado"}
-                        </button>
-                    </form>
-                </div>
-            )}
-            
-            {/* Paso 2: Seleccionar Plan */}
-            {step === 2 && studentInfo && (
-                <div>
-                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Múltiples Planes</h2>
-                    <p className="text-gray-600 mb-4">El/La estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado/a en múltiples planes este año. Por favor, seleccione uno:</p>
-                    <div className="space-y-3">
-                        {foundPlans.map(plan => (
+            <main className="w-full max-w-lg p-8 bg-white rounded-xl shadow-lg border border-gray-200">
+
+                {/* Paso 1: Pedir DNI */}
+                {step === 1 && (
+                    <div>
+                        <h2 className="text-2xl font-semibold text-gray-800 mb-5">Certificado de Alumno Regular</h2>
+                        <form onSubmit={handleDniSearch} className="space-y-4">
+                            <div>
+                                <label htmlFor="dni_student" className="block text-sm font-medium text-gray-700">Ingrese su DNI (sin puntos)</label>
+                                <input
+                                    type="text"
+                                    id="dni_student"
+                                    value={dni}
+                                    onChange={(e) => setDni(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    placeholder="Ej: 30123456"
+                                    required
+                                />
+                            </div>
                             <button
-                                key={plan}
-                                onClick={() => handlePlanSelect(plan)}
-                                className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300 font-medium"
+                                type="submit"
+                                disabled={isLoading}
+                                className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                             >
-                                {plan}
+                                {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
+                                {isLoading ? "Buscando..." : "Solicitar Certificado"}
                             </button>
-                        ))}
+                        </form>
                     </div>
-                    <button onClick={resetFlow} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver</button>
-                </div>
-            )}
-            
-            {/* Paso 3: Mostrar Certificado */}
-            {step === 3 && studentInfo && selectedPlan && (
-                <CertificateDisplay
-                    student={studentInfo}
-                    plan={selectedPlan}
-                    onCancel={resetFlow}
-                />
-            )}
+                )}
 
-            {/* 2. Rendimiento Académico (Botón (AHORA) habilitado) */}
-            <div className="mt-8 border-t pt-6">
-                 <h2 className="text-2xl font-semibold text-gray-800 mb-4">Rendimiento Académico</h2>
-                 <button 
-                    onClick={() => navigateTo('student_analitico')}
-                    className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                    <IconReport className="w-5 h-5 mr-2" />
-                    Consultar Analítico
-                </button>
-            </div>
-        </main>
-        
-        <button
-          onClick={() => navigateTo('landing')}
-          className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
-        >
-          &larr; Volver al inicio
-        </button>
-      </div>
+                {/* Paso 2: Seleccionar Plan */}
+                {step === 2 && studentInfo && (
+                    <div>
+                        <h2 className="text-2xl font-semibold text-gray-800 mb-5">Múltiples Planes</h2>
+                        <p className="text-gray-600 mb-4">El/La estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado/a en múltiples planes este año. Por favor, seleccione uno:</p>
+                        <div className="space-y-3">
+                            {foundPlans.map(plan => (
+                                <button
+                                    key={plan}
+                                    onClick={() => handlePlanSelect(plan)}
+                                    className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300 font-medium"
+                                >
+                                    {plan}
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={resetFlow} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver</button>
+                    </div>
+                )}
+
+                {/* Paso 3: Mostrar Certificado */}
+                {step === 3 && studentInfo && selectedPlan && (
+                    <CertificateDisplay
+                        student={studentInfo}
+                        plan={selectedPlan}
+                        onCancel={resetFlow}
+                    />
+                )}
+
+                {/* 2. Rendimiento Académico (Botón (AHORA) habilitado) */}
+                <div className="mt-8 border-t pt-6">
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-4">Rendimiento Académico</h2>
+                    <button
+                        onClick={() => navigateTo('student_analitico')}
+                        className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                        <IconReport className="w-5 h-5 mr-2" />
+                        Consultar Analítico
+                    </button>
+                </div>
+            </main>
+
+            <button
+                onClick={() => navigateTo('landing')}
+                className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
+            >
+                &larr; Volver al inicio
+            </button>
+        </div>
     );
 };
 
@@ -879,52 +636,52 @@ const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, students, mat
  * (NUEVO) Componente de Certificado (Estudiante)
  */
 const CertificateDisplay = ({ student, plan, onCancel }) => {
-            
+
     const handlePrint = () => {
         // (CORREGIDO) Apuntar a los IDs correctos del Certificado
         const printArea = document.getElementById('certificate-print-area');
         const previewContent = document.getElementById('certificate-preview-content');
-        
+
         if (printArea && previewContent) {
             // (NUEVO) Añadir clase al body para activar los estilos A5
             document.body.classList.add('printing-certificado');
-            
+
             printArea.innerHTML = previewContent.innerHTML;
             window.print();
             printArea.innerHTML = ''; // Limpiar
-            
+
             // (NUEVO) Quitar clase del body después de imprimir
             document.body.classList.remove('printing-certificado');
         } else {
             console.error("Error al preparar la impresión del certificado.");
         }
     };
-    
+
     // Determinar "alumno/a"
     const alumnoTerm = (student.genero || 'Otro').toLowerCase() === 'femenino' ? 'alumna' : 'alumno';
 
     return (
         <div>
             <h2 className="text-2xl font-semibold text-gray-800 mb-5">Certificado Generado</h2>
-            
+
             {/* Contenedor de VISTA PREVIA */}
-            <div id="certificate-preview-content" className="certificate-content" style={{ 
-                padding: '1.5rem', 
-                border: '1px dashed #ccc', 
-                fontFamily: "'Times New Roman', Times, serif", 
+            <div id="certificate-preview-content" className="certificate-content" style={{
+                padding: '1.5rem',
+                border: '1px dashed #ccc',
+                fontFamily: "'Times New Roman', Times, serif",
                 fontSize: '12pt',
                 lineHeight: 1.6,
                 background: 'white',
                 color: 'black'
             }}>
-                <div 
-                    className="certificate-header" 
-                    style={{ 
+                <div
+                    className="certificate-header"
+                    style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        fontWeight: 'bold', 
-                        fontSize: '14pt', 
+                        fontWeight: 'bold',
+                        fontSize: '14pt',
                         marginBottom: '30px',
                         paddingBottom: '10px',
                         borderBottom: '2px solid #000' // Opcional: añade un borde como el analítico
@@ -935,12 +692,12 @@ const CertificateDisplay = ({ student, plan, onCancel }) => {
                         <p style={{ margin: 0 }}>Escuela Superior de Música de Neuquén</p>
                         <p style={{ margin: 0, fontSize: '12pt', fontWeight: 'normal' }}>Consejo Provincial de Educación</p>
                     </div>
-                    
+
                     {/* Derecha (Logo) */}
                     <div>
-                        <img 
-                            src="/logo.png" 
-                            alt="Logo" 
+                        <img
+                            src="/logo.png"
+                            alt="Logo"
                             style={{ width: '80px', height: 'auto' }}
                         />
                     </div>
@@ -953,13 +710,13 @@ const CertificateDisplay = ({ student, plan, onCancel }) => {
                     </p>
                 </div>
                 <div className="certificate-footer" style={{ marginBottom: '40px' }}>
-                     <p>Se extiende el presente certificado a los {new Date().toLocaleDateString('es-AR', { day: '2-digit' })} días del mes de {new Date().toLocaleDateString('es-AR', { month: 'long' })} de {new Date().getFullYear()}.</p>
+                    <p>Se extiende el presente certificado a los {new Date().toLocaleDateString('es-AR', { day: '2-digit' })} días del mes de {new Date().toLocaleDateString('es-AR', { month: 'long' })} de {new Date().getFullYear()}.</p>
                 </div>
-                <div className="certificate-signatures" style={{ 
-                    paddingTop: '50px', 
-                    display: 'flex', 
-                    justifyContent: 'space-around', 
-                    textAlign: 'center' 
+                <div className="certificate-signatures" style={{
+                    paddingTop: '50px',
+                    display: 'flex',
+                    justifyContent: 'space-around',
+                    textAlign: 'center'
                 }}>
                     <div>
                         <p className="certificate-signature-line" style={{ borderTop: '1px solid #000', width: '200px', paddingTop: '5px' }}>Firma</p>
@@ -969,18 +726,18 @@ const CertificateDisplay = ({ student, plan, onCancel }) => {
                     </div>
                 </div>
             </div>
-            
+
             {/* Botones de Acción */}
             <div className="mt-8 flex space-x-3">
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     onClick={onCancel}
                     className="w-1/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-gray-200 hover:bg-gray-300 text-gray-700"
                 >
                     &larr; Volver
                 </button>
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     onClick={handlePrint}
                     className="w-2/3 flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
@@ -996,21 +753,21 @@ const CertificateDisplay = ({ student, plan, onCancel }) => {
 /**
  * (NUEVO) Pantalla 2.5: Analítico del Estudiante
  */
-const StudentAnaliticoScreen = ({ 
-    navigateTo, showMessage, students, matriculaciones, materias, notas 
+const StudentAnaliticoScreen = ({
+    navigateTo, showMessage, students, matriculaciones, materias, notas
 }) => {
     return (
         <div className="flex flex-col items-center min-h-screen p-8 bg-gray-100">
-            
+
             {/* Este div es correcto, lo necesita el botón de imprimir */}
             <div id="analitico-print-area" className="print-area"></div>
 
             {/* SÓLO este header debe ser 'no-print' */}
             <header className="text-center mb-10 no-print">
-              <h1 className="text-4xl font-bold text-gray-800">Portal Estudiante</h1>
-              <p className="text-lg text-gray-600 mt-2">Consulta de Rendimiento Académico</p>
+                <h1 className="text-4xl font-bold text-gray-800">Portal Estudiante</h1>
+                <p className="text-lg text-gray-600 mt-2">Consulta de Rendimiento Académico</p>
             </header>
-    
+
             {/* MODIFICADO: Quitamos 'no-print' de aquí */}
             <main className="w-full max-w-7xl p-8 bg-white rounded-xl shadow-lg border border-gray-200">
                 {/* Este 'main' CONTIENE el analítico.
@@ -1021,21 +778,21 @@ const StudentAnaliticoScreen = ({
                     appId={null}
                     showMessage={showMessage}
                     materias={materias}
-                    students={students} 
+                    students={students}
                     matriculaciones={matriculaciones}
                     notas={notas}
                     snapshotToArray={null} // No se usa si no hay queries
                 />
             </main>
-            
+
             {/* SÓLO este botón debe ser 'no-print' */}
             <button
-              onClick={() => navigateTo('student_access')}
-              className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150 no-print"
+                onClick={() => navigateTo('student_access')}
+                className="mt-10 text-indigo-600 hover:text-indigo-800 font-medium transition duration-150 no-print"
             >
-              &larr; Volver al Portal Estudiante
+                &larr; Volver al Portal Estudiante
             </button>
-          </div>
+        </div>
     );
 };
 
@@ -1054,320 +811,296 @@ const AdminLoginScreen = ({ navigateTo, showMessage }) => {
         setLoading(true);
 
         try {
-            const auth = getAuth();
-            // (NUEVO) Intentar iniciar sesión con Email y Contraseña
-            await signInWithEmailAndPassword(auth, email, password);
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-            // Si llegamos aquí, el login fue exitoso
+            if (error) throw error;
+
             showMessage("Acceso autorizado.", false);
             navigateTo('admin_dashboard');
 
         } catch (error) {
             console.error("Error en inicio de sesión:", error);
-            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-                showMessage("Error: Email o contraseña incorrectos.", true);
-            } else {
-                showMessage(`Error: ${error.message}`, true);
-            }
+            showMessage(`Error: ${error.message}`, true);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-      <div className="flex items-center justify-center min-h-screen p-8 bg-gray-100">
-        <main className="w-full max-w-md p-10 bg-white rounded-xl shadow-2xl border border-gray-200">
-            <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Acceso Administrativo</h1>
+        <div className="flex items-center justify-center min-h-screen p-8 bg-gray-100">
+            <main className="w-full max-w-md p-10 bg-white rounded-xl shadow-2xl border border-gray-200">
+                <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Acceso Administrativo</h1>
 
-            {/* --- FORMULARIO MODIFICADO --- */}
-            <form onSubmit={handleLogin} className="space-y-6">
-                <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-                    <input 
-                        type="email" 
-                        id="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
-                        placeholder="tu.email@ejemplo.com"
-                        required
-                    />
-                </div>
-                <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
-                    <input 
-                        type="password" 
-                        id="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
-                        placeholder="••••••••"
-                        required
-                    />
-                </div>
-                <button 
-                    type="submit" 
-                    disabled={loading}
-                    className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                {/* --- FORMULARIO MODIFICADO --- */}
+                <form onSubmit={handleLogin} className="space-y-6">
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                        <input
+                            type="email"
+                            id="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="tu.email@ejemplo.com"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
+                        <input
+                            type="password"
+                            id="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                            placeholder="••••••••"
+                            required
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                    >
+                        {loading ? <IconLoading /> : 'Ingresar'}
+                    </button>
+                </form>
+                {/* --- FIN FORMULARIO MODIFICADO --- */}
+
+                <button
+                    onClick={() => navigateTo('landing')}
+                    className="mt-8 text-center w-full text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
                 >
-                    {loading ? <IconLoading /> : 'Ingresar'}
+                    &larr; Volver al inicio
                 </button>
-            </form>
-            {/* --- FIN FORMULARIO MODIFICADO --- */}
-
-             <button
-              onClick={() => navigateTo('landing')}
-              className="mt-8 text-center w-full text-indigo-600 hover:text-indigo-800 font-medium transition duration-150"
-            >
-              &larr; Volver al inicio
-            </button>
-        </main>
-      </div>
+            </main>
+        </div>
     );
 };
 
 /**
  * Pantalla 4: Dashboard Administrativo
  */
-const AdminDashboardScreen = ({ 
+const AdminDashboardScreen = ({
     userClaims,
     navigateTo, activeTab, handleTabChange, showMessage,
     db, userId, appId, students, instrumentos, matriculaciones, materias, notas, // (NUEVO) notas
     addStudent, updateStudent, deleteStudent, deleteMateria, // (NUEVO) Recibir deleteMateria
     notasSubTab, setNotasSubTab,
-    snapshotToArray 
+    snapshotToArray
 }) => {
-  return (
-    <div className="min-h-screen bg-gray-100">
-      {/* (NUEVO) Contenedor de Impresión (vacío, solo para el analítico) */}
-      <div id="analitico-print-area" className="print-area"></div>
+    return (
+        <div className="min-h-screen bg-gray-100">
+            {/* (NUEVO) Contenedor de Impresión (vacío, solo para el analítico) */}
+            <div id="analitico-print-area" className="print-area"></div>
 
-      <header className="bg-white shadow-md sticky top-0 z-10 no-print">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-                <div className="flex items-center">
-                    <span className="font-bold text-xl text-indigo-600">FOBAM</span>
-                    <span className="font-semibold text-xl text-gray-700 ml-2">Admin</span>
+            <header className="bg-white shadow-md sticky top-0 z-10 no-print">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16">
+                        <div className="flex items-center">
+                            <span className="font-bold text-xl text-indigo-600">FOBAM</span>
+                            <span className="font-semibold text-xl text-gray-700 ml-2">Admin</span>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                await supabase.auth.signOut();
+                                navigateTo('landing');
+                            }}
+                            className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                        >
+                            Cerrar Sesión &rarr;
+                        </button>
+                    </div>
                 </div>
-                <button 
-                onClick={() => {
-                    const auth = getAuth();
-                    auth.signOut(); // <-- (NUEVO) Cierra la sesión de Firebase
-                    // El 'onAuthStateChanged' se disparará solo y nos llevará al login anónimo
-                    navigateTo('landing'); // Volver a la pantalla de inicio
-                }}
-                className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-            >
-                Cerrar Sesión &rarr;
-            </button>
-            </div>
-        </div>
-        
-        {/* (REORDENADO Y ESTILO ACTUALIZADO) Barra de Pestañas */}
-        <nav className="flex flex-wrap border-b border-gray-200 bg-gray-50 p-2 overflow-x-auto">
-             <TabButton 
-               id="inscribir" 
-               label="1. Inscribir/Editar" 
-               isActive={activeTab === 'inscribir'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="listado" 
-               label="2. Listado Estudiantes" 
-               isActive={activeTab === 'listado'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="matriculacion" 
-               label="3. Matricular" 
-               isActive={activeTab === 'matriculacion'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="notas" 
-               label="4. Gestión de Notas" 
-               isActive={activeTab === 'notas'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="analitico" 
-               label="5. Analítico" 
-               isActive={activeTab === 'analitico'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="certificado" 
-               label="6.Certificado" 
-               isActive={activeTab === 'certificado'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="correlativas" 
-               label="7. Correlativas" 
-               isActive={activeTab === 'correlativas'} 
-               onClick={handleTabChange} 
-             />
-             <TabButton 
-               id="cursados_activos" 
-               label="8. Cursados Activos" 
-               isActive={activeTab === 'cursados_activos'} 
-               onClick={handleTabChange} 
-             />
-             <TabButton 
-                id="admin_horarios" 
-                label="9. Horarios" // ABM = Alta Baja Modificación
-                isActive={activeTab === 'admin_horarios'} 
-                onClick={handleTabChange}
-             />
-             <TabButton 
-                id="informes" 
-                label="10. Estadísticas" 
-                isActive={activeTab === 'informes'} 
-                onClick={handleTabChange}
-             />
-            {/* --- (NUEVO) BLOQUE CONDICIONAL PARA SUPERADMIN --- */}
-            {/* Estas pestañas solo se mostrarán si userClaims.super_admin es 'true' */}
-            {userClaims?.super_admin && (
-            <>
-             <TabButton 
-               id="instrumentos" 
-               label="11. Admin Instrumentos" 
-               isActive={activeTab === 'instrumentos'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-               id="materias" 
-               label="12. Admin Materias" 
-               isActive={activeTab === 'materias'} 
-               onClick={handleTabChange}
-             />
-             <TabButton 
-                id="carga_masiva" 
-                label="13. Carga Masiva" 
-                isActive={activeTab === 'carga_masiva'} 
-                onClick={handleTabChange}
-                />
-                </>
-            )}
-            {/* --- FIN DEL BLOQUE CONDICIONAL --- */}
-            
-        </nav>
-      </header>
-      
-      {/* (REORDENADO) Contenido de Pestañas */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 no-print" id="main-content">
-          
-          {activeTab === 'inscribir' && (
-            <InscribirEditarTab 
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                onStudentAdded={addStudent}
-                onStudentUpdated={updateStudent}
-                snapshotToArray={snapshotToArray}
-            />
-          )}
-          {activeTab === 'listado' && (
-            <ListadoEstudiantesTab 
-                students={students}
-                deleteStudent={deleteStudent}
-            />
-          )}
-          {activeTab === 'matriculacion' && (
-            <MatriculacionTab 
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                instrumentos={instrumentos}
-                matriculaciones={matriculaciones}
-                snapshotToArray={snapshotToArray}
-            />
-          )}
-          {activeTab === 'notas' && (
-             <NotasTab
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                materias={materias}
-                students={students} 
-                matriculaciones={matriculaciones}
-                notas={notas}
-                notasSubTab={notasSubTab}
-                setNotasSubTab={setNotasSubTab}
-                snapshotToArray={snapshotToArray}
-             />
-          )}
-          {activeTab === 'analitico' && (
-             <AnaliticoTab
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                materias={materias}
-                students={students} 
-                matriculaciones={matriculaciones}
-                notas={notas}
-                snapshotToArray={snapshotToArray}
-             />
-          )}
-          {activeTab === 'certificado' && (
-            <CertificadoTab 
-                showMessage={showMessage}
-                students={students}
-                matriculaciones={matriculaciones}
-            />
-          )}
-          {activeTab === 'correlativas' && 
-             <CorrelativasChecker db={db} appId={appId} />}
 
-          {activeTab === 'cursados_activos' && (
-             <CursadosActivos 
-                db={db} 
-                appId={appId} 
-                showMessage={showMessage} 
-            />
-            )}
-          {activeTab === 'admin_horarios' && (
-             <AdminHorarios 
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                materias={materias} // Importante pasarle la lista de materias existente
-            />
-            )}
-          {activeTab === 'informes' && (
-             <AdminInformes 
-                db={db}
-                appId={appId}
-             />
-            )}
-          {activeTab === 'instrumentos' && (
-            <InstrumentosTab 
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                instrumentos={instrumentos}
-            />
-          )}
-          
-          {activeTab === 'materias' && (
-            <MateriasTab 
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-                materias={materias}
-                deleteMateria={deleteMateria} 
-            />
-          )}
-          {activeTab === 'carga_masiva' && (
-            <CargaMasivaTab 
-                db={db}
-                appId={appId}
-                showMessage={showMessage}
-            />
-          )}
-      </main>
-    </div>
-  );
+                {/* (REORDENADO Y ESTILO ACTUALIZADO) Barra de Pestañas */}
+                <nav className="flex flex-wrap border-b border-gray-200 bg-gray-50 p-2 overflow-x-auto">
+                    <TabButton
+                        id="inscribir"
+                        label="1. Inscribir/Editar"
+                        isActive={activeTab === 'inscribir'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="listado"
+                        label="2. Listado Estudiantes"
+                        isActive={activeTab === 'listado'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="matriculacion"
+                        label="3. Matricular"
+                        isActive={activeTab === 'matriculacion'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="notas"
+                        label="4. Gestión de Notas"
+                        isActive={activeTab === 'notas'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="analitico"
+                        label="5. Analítico"
+                        isActive={activeTab === 'analitico'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="certificado"
+                        label="6.Certificado"
+                        isActive={activeTab === 'certificado'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="correlativas"
+                        label="7. Correlativas"
+                        isActive={activeTab === 'correlativas'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="cursados_activos"
+                        label="8. Cursados Activos"
+                        isActive={activeTab === 'cursados_activos'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="admin_horarios"
+                        label="9. Horarios" // ABM = Alta Baja Modificación
+                        isActive={activeTab === 'admin_horarios'}
+                        onClick={handleTabChange}
+                    />
+                    <TabButton
+                        id="informes"
+                        label="10. Estadísticas"
+                        isActive={activeTab === 'informes'}
+                        onClick={handleTabChange}
+                    />
+                    {/* --- (NUEVO) BLOQUE CONDICIONAL PARA SUPERADMIN --- */}
+                    {/* Estas pestañas solo se mostrarán si userClaims.super_admin es 'true' */}
+                    {userClaims?.super_admin && (
+                        <>
+                            <TabButton
+                                id="instrumentos"
+                                label="11. Admin Instrumentos"
+                                isActive={activeTab === 'instrumentos'}
+                                onClick={handleTabChange}
+                            />
+                            <TabButton
+                                id="materias"
+                                label="12. Admin Materias"
+                                isActive={activeTab === 'materias'}
+                                onClick={handleTabChange}
+                            />
+                            <TabButton
+                                id="carga_masiva"
+                                label="13. Carga Masiva"
+                                isActive={activeTab === 'carga_masiva'}
+                                onClick={handleTabChange}
+                            />
+                        </>
+                    )}
+                    {/* --- FIN DEL BLOQUE CONDICIONAL --- */}
+
+                </nav>
+            </header>
+
+            {/* (REORDENADO) Contenido de Pestañas */}
+            <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 no-print" id="main-content">
+
+                {activeTab === 'inscribir' && (
+                    <InscribirEditarTab
+                        showMessage={showMessage}
+                        onStudentAdded={addStudent}
+                        onStudentUpdated={updateStudent}
+                        snapshotToArray={snapshotToArray}
+                    />
+                )}
+                {activeTab === 'listado' && (
+                    <ListadoEstudiantesTab
+                        students={students}
+                        deleteStudent={deleteStudent}
+                    />
+                )}
+                {activeTab === 'matriculacion' && (
+                    <MatriculacionTab
+                        showMessage={showMessage}
+                        instrumentos={instrumentos}
+                        matriculaciones={matriculaciones}
+                        snapshotToArray={snapshotToArray}
+                    />
+                )}
+                {activeTab === 'notas' && (
+                    <NotasTab
+                        showMessage={showMessage}
+                        materias={materias}
+                        students={students}
+                        matriculaciones={matriculaciones}
+                        notas={notas}
+                        notasSubTab={notasSubTab}
+                        setNotasSubTab={setNotasSubTab}
+                        snapshotToArray={snapshotToArray}
+                    />
+                )}
+                {activeTab === 'analitico' && (
+                    <AnaliticoTab
+                        showMessage={showMessage}
+                        materias={materias}
+                        students={students}
+                        matriculaciones={matriculaciones}
+                        notas={notas}
+                        snapshotToArray={snapshotToArray}
+                    />
+                )}
+                {activeTab === 'certificado' && (
+                    <CertificadoTab
+                        showMessage={showMessage}
+                        students={students}
+                        matriculaciones={matriculaciones}
+                    />
+                )}
+                {activeTab === 'correlativas' &&
+                    <CorrelativasChecker />}
+
+                {activeTab === 'cursados_activos' && (
+                    <CursadosActivos
+                        showMessage={showMessage}
+                    />
+                )}
+                {activeTab === 'admin_horarios' && (
+                    <AdminHorarios
+                        showMessage={showMessage}
+                        materias={materias} // Importante pasarle la lista de materias existente
+                    />
+                )}
+                {activeTab === 'informes' && (
+                    <AdminInformes
+                    />
+                )}
+                {activeTab === 'instrumentos' && (
+                    <InstrumentosTab
+                        showMessage={showMessage}
+                        instrumentos={instrumentos}
+                    />
+                )}
+
+                {activeTab === 'materias' && (
+                    <MateriasTab
+                        showMessage={showMessage}
+                        materias={materias}
+                        deleteMateria={deleteMateria}
+                    />
+                )}
+                {activeTab === 'carga_masiva' && (
+                    <CargaMasivaTab
+                        showMessage={showMessage}
+                    />
+                )}
+            </main>
+        </div>
+    );
 };
 
 // -----------------------------------------------------------------
@@ -1377,24 +1110,24 @@ const AdminDashboardScreen = ({
 /**
  * Pestaña 5: Analítico
  */
-const AnaliticoTab = ({ 
-    db, appId, showMessage, materias, students, matriculaciones, notas, snapshotToArray 
+const AnaliticoTab = ({
+    showMessage, materias, students, matriculaciones, notas, snapshotToArray
 }) => {
     const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Mostrar Reporte
     const [dniSearch, setDniSearch] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
-    
+
     const [foundPlans, setFoundPlans] = useState([]); // Almacena los planes (strings)
-    const [selectedPlan, setSelectedPlan] = useState(''); 
+    const [selectedPlan, setSelectedPlan] = useState('');
     const [studentInfo, setStudentInfo] = useState(null); // Info del alumno
-    
+
     // (AJUSTE) Estado para la URL del Logo (ELIMINADO)
 
     // Paso 1: Buscar DNI en Matriculación
     const handleDniSearch = async (e) => {
         e.preventDefault();
         if (!dniSearch) return showMessage("Ingrese un DNI.", true);
-        
+
         setSearchLoading(true);
         setFoundPlans([]);
         setSelectedPlan('');
@@ -1405,7 +1138,7 @@ const AnaliticoTab = ({
             const matriculasDelDNI = matriculaciones.filter(m => m.dni === dniSearch);
             // Buscar info del estudiante en la tabla 'students'
             const studentData = students.find(s => s.dni === dniSearch);
-            
+
             if (matriculasDelDNI.length === 0 || !studentData) {
                 showMessage(`DNI ${dniSearch} no encontrado o sin matriculaciones.`, true);
                 setStep(1);
@@ -1457,8 +1190,8 @@ const AnaliticoTab = ({
                 <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200 max-w-lg mx-auto">
                     <label htmlFor="dni_search_analitico" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
                     <div className="mt-1 flex space-x-2">
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="dni_search_analitico"
                             value={dniSearch}
                             onChange={(e) => setDniSearch(e.target.value)}
@@ -1466,8 +1199,8 @@ const AnaliticoTab = ({
                             placeholder="Buscar DNI..."
                             required
                         />
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={searchLoading}
                             className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                         >
@@ -1496,10 +1229,10 @@ const AnaliticoTab = ({
                     <button onClick={resetForm} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver a buscar</button>
                 </div>
             )}
-            
+
             {/* Paso 3: Mostrar Reporte */}
             {step === 3 && studentInfo && selectedPlan && (
-                <AnaliticoReport 
+                <AnaliticoReport
                     student={studentInfo}
                     plan={selectedPlan}
                     allNotas={notas}
@@ -1515,7 +1248,7 @@ const AnaliticoTab = ({
  * Componente de Reporte Analítico (para impresión)
  * (AJUSTADO SEGÚN REQUISITOS)
  */
-const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => { 
+const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => {
 
     // 1. (LÓGICA ACTUALIZADA) Procesamiento de notas
     const processedData = useMemo(() => {
@@ -1523,8 +1256,8 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
         const materiasDelPlan = allMaterias.filter(m => m.plan === plan);
 
         // --- PASO 2: Obtener TODAS las notas aprobadas del alumno ---
-        const notasAprobadas = allNotas.filter(n => 
-            n.dni === student.dni && 
+        const notasAprobadas = allNotas.filter(n =>
+            n.dni === student.dni &&
             ['Promoción', 'Examen', 'Equivalencia'].includes(n.condicion)
         );
 
@@ -1540,14 +1273,14 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
         });
 
         // --- (NUEVO Y CORREGIDO) PASO 4: Lógica de Exclusión (EC vs DF) ---
-        
+
         // (CAMBIO) Nombres en minúscula para comparación robusta
         const EC_NAME = "expresión corporal";
         const DF_NAME = "danzas folklóricas";
 
         // Función auxiliar para buscar de forma robusta
         const findMateriaAprobada = (nombreMateria) => {
-            return materiasConNotas.find(m => 
+            return materiasConNotas.find(m =>
                 String(m.anio) === '1' && // (CAMBIO) String(m.anio) compara '1' y 1
                 m.materia.toLowerCase() === nombreMateria && // (CAMBIO) .toLowerCase()
                 m.notaData != null // Tiene nota
@@ -1560,12 +1293,12 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
         // Aplicar el filtro de exclusión
         if (ecAprobada) {
             // Si EC tiene nota, filtramos (sacamos) a DF (solo de Año 1)
-            materiasConNotas = materiasConNotas.filter(m => 
+            materiasConNotas = materiasConNotas.filter(m =>
                 !(String(m.anio) === '1' && m.materia.toLowerCase() === DF_NAME)
             );
         } else if (dfAprobada) {
             // Si DF tiene nota, filtramos (sacamos) a EC (solo de Año 1)
-            materiasConNotas = materiasConNotas.filter(m => 
+            materiasConNotas = materiasConNotas.filter(m =>
                 !(String(m.anio) === '1' && m.materia.toLowerCase() === EC_NAME)
             );
         }
@@ -1583,15 +1316,15 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
             acc[anio].push(materia);
             return acc;
         }, {});
-        
+
         // --- PASO 6: Ordenar materias dentro de cada año ---
         Object.keys(grouped).forEach(anio => {
-           grouped[anio].sort((a,b) => a.materia.localeCompare(b.materia));
+            grouped[anio].sort((a, b) => a.materia.localeCompare(b.materia));
         });
 
         return grouped;
     }, [student.dni, plan, allNotas, allMaterias]);
-    
+
     // (FIX) Ordenar los años numéricamente
     const anios = Object.keys(processedData).sort((a, b) => {
         if (a === 'N/A') return 1;
@@ -1599,7 +1332,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
         // Ordenar numéricamente (1, 2, 3, 4, 5)
         return a.localeCompare(b, undefined, { numeric: true });
     });
-    
+
     // (NUEVO) Dividir años para paginación
     const aniosPagina1 = anios.filter(a => ['1', '2', '3'].includes(a));
     const aniosPagina2 = anios.filter(a => !['1', '2', '3'].includes(a)); // 4, 5, N/A
@@ -1608,22 +1341,22 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
     const handlePrint = () => {
         const printArea = document.getElementById('analitico-print-area');
         const previewContent = document.getElementById('analitico-preview-content');
-        
+
         if (printArea && previewContent) {
             // (NUEVO) Añadir clase al body para activar los estilos A4
             document.body.classList.add('printing-analitico');
-            
+
             printArea.innerHTML = previewContent.innerHTML;
             window.print();
             printArea.innerHTML = ''; // Limpiar
-            
+
             // (NUEVO) Quitar clase del body después de imprimir
             document.body.classList.remove('printing-analitico');
         } else {
             console.error("Error al preparar la impresión del analítico.");
         }
     };
-    
+
     // Helper para formatear fecha
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -1636,15 +1369,15 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
             return dateString;
         }
     };
-    
+
     return (
         <div className="bg-white p-8 rounded-lg shadow-lg border">
             {/* Contenedor de VISTA PREVIA. */}
-           <div id="analitico-preview-content" className="max-w-4xl mx-auto bg-white text-black">
-                
+            <div id="analitico-preview-content" className="max-w-4xl mx-auto bg-white text-black">
+
                 {/* 1. Encabezado (AJUSTADO) */}
                 <div className="print-header text-left text-sm border-b-2 border-black pb-4">
-                    
+
                     {/* --- BLOQUE FLEX (LOGO Y NOMBRE) --- */}
                     <div className="flex justify-between items-center">
                         {/* Izquierda (Texto) */}
@@ -1657,22 +1390,22 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                         </div>
                         {/* Derecha (Logo) */}
                         <div>
-                            <img src="/logo.png" alt="Logo" className="w-20 h-auto" /> 
+                            <img src="/logo.png" alt="Logo" className="w-20 h-auto" />
                         </div>
                     </div>
                     {/* --- FIN BLOQUE FLEX --- */}
 
                     {/* CAMBIO: Se eliminó 'mt-4' para juntar los bloques de texto */}
-                    <div className=""> 
-                        
-                        
+                    <div className="">
+
+
                         {/* CAMBIO: Se añadió 'text-center' y se mantuvo el margen superior */}
                         <h3 className="text-2xl font-semibold mt-2 text-center">CERTIFICADO DE RENDIMIENTO ACADÉMICO (ANALÍTICO)</h3>
-                        
-                        
+
+
                     </div>
                 </div>
-                
+
                 {/* 2. Datos del Estudiante (AJUSTADO) */}
                 <div className="my-6 text-sm">
                     <h3 className="text-base font-bold mb-3 border-b border-gray-400">DATOS DEL/DE LA ESTUDIANTE</h3>
@@ -1693,7 +1426,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                 {/* 3. Espacios Acreditados (Materias) (LÓGICA DE PAGINACIÓN AJUSTADA) */}
                 <div className="my-6">
                     <h3 className="text-base font-bold mb-2 border-b border-gray-400">ESPACIOS CURRICULARES ACREDITADOS</h3>
-                    
+
                     {/* --- PÁGINA 1 (Años 1-3) --- */}
                     {aniosPagina1.map(anio => {
                         const materiasDelAnio = processedData[anio] || [];
@@ -1735,7 +1468,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                         }
                         return null;
                     })}
-                    
+
                     {/* --- PÁGINA 2 (Años 4, 5, etc. + Footer) --- */}
                     {/* (NUEVO) Este div fuerza el salto de página en impresión */}
                     <div className="print-page-break">
@@ -1777,7 +1510,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                         {aniosPagina1.length === 0 && aniosPagina2.length === 0 && (
                             <p className="text-center italic text-gray-500 py-4">No se encontraron materias cargadas en la tabla 'Materias' para el plan seleccionado.</p>
                         )}
-                        
+
                         {/* (AJUSTE) Pie de página movido a la Página 2 */}
                         <div className="mt-8 text-sm">
                             <p>Emitido en Neuquén Capital el {new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}.</p>
@@ -1792,7 +1525,7 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
                                 <p className="print-signature-line"></p>
                             </div>
                         </div>
-                        
+
                     </div> {/* Fin de .print-page-break */}
 
                 </div>
@@ -1801,15 +1534,15 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
 
             {/* Botones de Acción (Fuera del área de impresión) */}
             <div className="mt-8 flex space-x-3 no-print">
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     onClick={onCancel}
                     className="w-1/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-gray-200 hover:bg-gray-300 text-gray-700"
                 >
                     &larr; Volver a buscar
                 </button>
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     onClick={handlePrint}
                     className="w-2/3 flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
@@ -1824,86 +1557,80 @@ const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => 
 /**
  * Pestaña 4: Gestión de Notas (Contenedor Principal)
  */
-const NotasTab = ({ 
-    db, appId, showMessage, materias, students, matriculaciones, notas, 
+const NotasTab = ({
+    showMessage, materias, students, matriculaciones, notas,
     notasSubTab, setNotasSubTab, snapshotToArray
 }) => {
-  return (
-    <div id="gestion_notas">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Gestión de Notas</h2>
-      
-      {/* Sub-navegación para Notas */}
-      <div className="flex mb-6 border-b border-gray-300">
-        <TabButton 
-          id="ingresar_nota" 
-          label="Ingresar Nota" 
-          isActive={notasSubTab === 'ingresar_nota'} 
-          onClick={setNotasSubTab}
-        />
-        <TabButton 
-          id="ingresar_planilla" 
-          label="Ingresar Planilla" 
-          isActive={notasSubTab === 'ingresar_planilla'} 
-          onClick={setNotasSubTab}
-        />
-        <TabButton 
-          id="ingresar_analitico" 
-          label="Ingresar Analítico" 
-          isActive={notasSubTab === 'ingresar_analitico'} 
-          onClick={setNotasSubTab}
-        />
-      </div>
+    return (
+        <div id="gestion_notas">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Gestión de Notas</h2>
 
-      {/* Contenido de la Sub-Pestaña */}
-      {notasSubTab === 'ingresar_nota' && (
-        <IngresarNotaIndividual
-            db={db}
-            appId={appId}
-            showMessage={showMessage}
-            materias={materias}
-            matriculaciones={matriculaciones} 
-            snapshotToArray={snapshotToArray} 
-        />
-      )}
-      {notasSubTab === 'ingresar_planilla' && (
-        <IngresarPlanilla
-            db={db}
-            appId={appId}
-            showMessage={showMessage}
-            materias={materias}
-            students={students}
-            matriculaciones={matriculaciones} 
-        />
-      )}
-      {notasSubTab === 'ingresar_analitico' && (
-        <IngresarAnalitico
-            db={db}
-            appId={appId}
-            showMessage={showMessage}
-            materias={materias}
-            students={students}
-            matriculaciones={matriculaciones}
-            notas={notas}              
-        />
-      )}
-    </div>
-  );
+            {/* Sub-navegación para Notas */}
+            <div className="flex mb-6 border-b border-gray-300">
+                <TabButton
+                    id="ingresar_nota"
+                    label="Ingresar Nota"
+                    isActive={notasSubTab === 'ingresar_nota'}
+                    onClick={setNotasSubTab}
+                />
+                <TabButton
+                    id="ingresar_planilla"
+                    label="Ingresar Planilla"
+                    isActive={notasSubTab === 'ingresar_planilla'}
+                    onClick={setNotasSubTab}
+                />
+                <TabButton
+                    id="ingresar_analitico"
+                    label="Ingresar Analítico"
+                    isActive={notasSubTab === 'ingresar_analitico'}
+                    onClick={setNotasSubTab}
+                />
+            </div>
+
+            {/* Contenido de la Sub-Pestaña */}
+            {notasSubTab === 'ingresar_nota' && (
+                <IngresarNotaIndividual
+                    showMessage={showMessage}
+                    materias={materias}
+                    matriculaciones={matriculaciones}
+                    snapshotToArray={snapshotToArray}
+                />
+            )}
+            {notasSubTab === 'ingresar_planilla' && (
+                <IngresarPlanilla
+                    showMessage={showMessage}
+                    materias={materias}
+                    students={students}
+                    matriculaciones={matriculaciones}
+                />
+            )}
+            {notasSubTab === 'ingresar_analitico' && (
+                <IngresarAnalitico
+                    showMessage={showMessage}
+                    materias={materias}
+                    students={students}
+                    matriculaciones={matriculaciones}
+                    notas={notas}
+                />
+            )}
+        </div>
+    );
 };
 
 /**
  * Sub-Pestaña 4.1: Ingresar Nota Individual
  */
-const IngresarNotaIndividual = ({ 
-    db, appId, showMessage, materias, matriculaciones, snapshotToArray 
+const IngresarNotaIndividual = ({
+    showMessage, materias, matriculaciones, snapshotToArray
 }) => {
     const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Cargar Nota
     const [dniSearch, setDniSearch] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
-    
+
     const [foundPlans, setFoundPlans] = useState([]); // Almacena los planes (strings)
     const [selectedPlan, setSelectedPlan] = useState(''); // El plan (ej: '530 Arpa')
     const [studentInfo, setStudentInfo] = useState({ dni: '', nombres: '', apellidos: '' }); // Info del alumno
-    
+
     // Estado del formulario de nota
     const [selectedMateriaId, setSelectedMateriaId] = useState('');
     const [showObsField, setShowObsField] = useState(false);
@@ -1918,7 +1645,7 @@ const IngresarNotaIndividual = ({
     });
 
     const materiasCondicionales = [
-        'optativa 1', 'optativa 2', 
+        'optativa 1', 'optativa 2',
         'ensamble 1', 'ensamble 2', 'ensamble 3', 'ensamble 4'
     ];
 
@@ -1926,7 +1653,7 @@ const IngresarNotaIndividual = ({
     const handleDniSearch = async (e) => {
         e.preventDefault();
         if (!dniSearch) return showMessage("Ingrese un DNI.", true);
-        
+
         setSearchLoading(true);
         setFoundPlans([]);
         setSelectedPlan('');
@@ -1942,7 +1669,7 @@ const IngresarNotaIndividual = ({
             } else {
                 // Usar un Set para obtener planes únicos
                 const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
-                
+
                 // Guardar datos del alumno (del primer registro)
                 setStudentInfo({
                     dni: matriculasDelDNI[0].dni,
@@ -1987,21 +1714,21 @@ const IngresarNotaIndividual = ({
     const handleMateriaChange = (e) => {
         const materiaId = e.target.value;
         setSelectedMateriaId(materiaId);
-        
+
         if (materiaId) {
             const materiaSeleccionada = materias.find(m => m.id === materiaId);
             if (!materiaSeleccionada) {
-                 // Fallback por si la materia no está
+                // Fallback por si la materia no está
                 setShowObsField(false);
                 setNotaForm(prev => ({ ...prev, materia: 'Error - Materia no encontrada', obs_optativa_ensamble: '' }));
                 return;
             }
-            
+
             const materiaNombre = materiaSeleccionada.materia.toLowerCase();
-            
+
             // Actualizar el nombre de la materia en el formulario
             setNotaForm(prev => ({ ...prev, materia: materiaSeleccionada.materia }));
-            
+
             // Verificar si es condicional
             if (materiasCondicionales.includes(materiaNombre)) {
                 setShowObsField(true);
@@ -2025,7 +1752,7 @@ const IngresarNotaIndividual = ({
     // Guardar la nota
     const handleSaveNota = async (e) => {
         e.preventDefault();
-        
+
         // Validación
         if (!selectedMateriaId || !notaForm.nota || !notaForm.fecha || !notaForm.condicion) {
             return showMessage("Complete todos los campos obligatorios (Materia, Calificación, Fecha, Condición).", true);
@@ -2035,18 +1762,32 @@ const IngresarNotaIndividual = ({
         }
 
         setSearchLoading(true); // Reutilizar el estado de loading
-        
-        const notaData = {
-            ...studentInfo, // dni, nombres, apellidos
-            plan: selectedPlan,
-            ...notaForm,
-            timestamp: Timestamp.now()
-        };
 
         try {
-            const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
-            await addDoc(notasRef, notaData);
-            
+            // 1. Encontrar la matriculación correspondiente (usando la prop matriculaciones)
+            const matricula = matriculaciones.find(m => m.dni === studentInfo.dni && m.plan === selectedPlan);
+
+            if (!matricula) {
+                showMessage("No se encontró una matriculación activa para este alumno y plan.", true);
+                return;
+            }
+
+            // 2. Guardar en Supabase
+            const { error } = await supabase
+                .from('notas')
+                .insert([{
+                    matriculacion_id: matricula.id,
+                    materia_id: selectedMateriaId,
+                    calificacion: notaForm.nota,
+                    condicion: notaForm.condicion,
+                    fecha: notaForm.fecha,
+                    libro_folio: notaForm.libro_folio,
+                    observaciones: notaForm.observaciones,
+                    obs_detalle: notaForm.obs_optativa_ensamble
+                }]);
+
+            if (error) throw error;
+
             showMessage("Nota guardada exitosamente.", false);
             // Resetear todo
             resetForm();
@@ -2087,8 +1828,8 @@ const IngresarNotaIndividual = ({
                 <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200">
                     <label htmlFor="dni_search_nota" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
                     <div className="mt-1 flex space-x-2">
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="dni_search_nota"
                             value={dniSearch}
                             onChange={(e) => setDniSearch(e.target.value)}
@@ -2096,8 +1837,8 @@ const IngresarNotaIndividual = ({
                             placeholder="Buscar DNI en matriculaciones..."
                             required
                         />
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={searchLoading}
                             className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                         >
@@ -2145,8 +1886,8 @@ const IngresarNotaIndividual = ({
                             {/* Materia */}
                             <div>
                                 <label htmlFor="materia" className="block text-sm font-medium text-gray-700">Materia (del plan {selectedPlan})</label>
-                                <select 
-                                    id="materia" 
+                                <select
+                                    id="materia"
                                     name="materia"
                                     value={selectedMateriaId}
                                     onChange={handleMateriaChange}
@@ -2168,8 +1909,8 @@ const IngresarNotaIndividual = ({
                             {showObsField && (
                                 <div>
                                     <label htmlFor="obs_optativa_ensamble" className="block text-sm font-medium text-gray-700">Especifique Optativa/Ensamble</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         id="obs_optativa_ensamble"
                                         name="obs_optativa_ensamble"
                                         value={notaForm.obs_optativa_ensamble}
@@ -2184,8 +1925,8 @@ const IngresarNotaIndividual = ({
                             {/* Calificación */}
                             <div>
                                 <label htmlFor="nota" className="block text-sm font-medium text-gray-700">Calificación</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     id="nota"
                                     name="nota"
                                     value={notaForm.nota}
@@ -2199,8 +1940,8 @@ const IngresarNotaIndividual = ({
                             {/* Fecha */}
                             <div>
                                 <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">Fecha</label>
-                                <input 
-                                    type="date" 
+                                <input
+                                    type="date"
                                     id="fecha"
                                     name="fecha"
                                     value={notaForm.fecha}
@@ -2216,8 +1957,8 @@ const IngresarNotaIndividual = ({
                             {/* Condición */}
                             <div>
                                 <label htmlFor="condicion" className="block text-sm font-medium text-gray-700">Condición</label>
-                                <select 
-                                    id="condicion" 
+                                <select
+                                    id="condicion"
                                     name="condicion"
                                     value={notaForm.condicion}
                                     onChange={handleNotaFormChange}
@@ -2233,8 +1974,8 @@ const IngresarNotaIndividual = ({
                             {/* Libro/Folio */}
                             <div>
                                 <label htmlFor="libro_folio" className="block text-sm font-medium text-gray-700">Libro y Folio</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     id="libro_folio"
                                     name="libro_folio"
                                     value={notaForm.libro_folio}
@@ -2247,7 +1988,7 @@ const IngresarNotaIndividual = ({
                             {/* Observaciones */}
                             <div>
                                 <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700">Observaciones</label>
-                                <textarea 
+                                <textarea
                                     id="observaciones"
                                     name="observaciones"
                                     rows="4"
@@ -2262,8 +2003,8 @@ const IngresarNotaIndividual = ({
 
                     {/* Botón de Guardar */}
                     <div className="border-t pt-4">
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={searchLoading}
                             className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                         >
@@ -2279,8 +2020,8 @@ const IngresarNotaIndividual = ({
 /**
  * Sub-Pestaña 4.2: Ingresar Planilla
  */
-const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matriculaciones }) => {
-    
+const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones }) => {
+
     // Nombres únicos de materias (alfabético)
     const uniqueMaterias = useMemo(() => {
         const names = new Set(materias.map(m => m.materia));
@@ -2290,7 +2031,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
     // (FIX 1) Opciones para el desplegable de DNI (desde matriculaciones)
     const studentOptions = useMemo(() => {
         const uniqueStudents = new Map();
-        
+
         matriculaciones.forEach(m => {
             if (!uniqueStudents.has(m.dni)) {
                 uniqueStudents.set(m.dni, {
@@ -2306,10 +2047,10 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
     }, [matriculaciones]);
 
     const materiasCondicionales = [
-        'optativa 1', 'optativa 2', 
+        'optativa 1', 'optativa 2',
         'ensamble 1', 'ensamble 2', 'ensamble 3', 'ensamble 4'
     ];
-    
+
     // Estado
     const [commonData, setCommonData] = useState({
         materiaName: '', // Nombre de la materia
@@ -2334,7 +2075,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
     const handleMateriaChange = (e) => {
         const materiaNombre = e.target.value;
         setCommonData(prev => ({ ...prev, materiaName: materiaNombre, obs_optativa_ensamble: '' }));
-        
+
         if (materiaNombre && materiasCondicionales.includes(materiaNombre.toLowerCase())) {
             setShowObsField(true);
         } else {
@@ -2349,7 +2090,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
         if (isNaN(count) || count <= 0) {
             return showMessage("Ingrese un número válido de estudiantes.", true);
         }
-        
+
         const newRows = Array(count).fill(null).map((_, index) => ({
             id: index,
             dni: '',
@@ -2365,7 +2106,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
         const newRows = [...planillaRows];
         const row = newRows[index];
         row[field] = value;
-        
+
         // Si el campo es DNI, autocompletar
         if (field === 'dni') {
             const student = studentOptions.find(s => s.value === value);
@@ -2391,8 +2132,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
             setLoading(false);
             return showMessage("Debe seleccionar una materia.", true);
         }
-        
-        const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
+
         const savePromises = [];
         let notasGuardadas = 0;
         let advertencias = [];
@@ -2401,7 +2141,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
             for (const row of planillaRows) {
                 if (!row.dni || !row.nota) {
                     // Omitir filas vacías en lugar de lanzar error
-                    continue; 
+                    continue;
                 }
 
                 // 1. Encontrar todos los planes para este DNI en matriculaciones
@@ -2420,22 +2160,23 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
 
                 // 2. Por cada plan, verificar si la materia existe
                 for (const plan of planesDelEstudiante) {
-                    const materiaExisteEnPlan = materias.some(m => m.plan === plan && m.materia === materiaName);
+                    const foundMateria = materias.find(m => m.plan === plan && m.materia === materiaName);
+                    const foundMatricula = matriculaciones.find(m => m.dni === row.dni && m.plan === plan);
 
-                    // 3. Si existe, registrar la nota para ESE plan
-                    if (materiaExisteEnPlan) {
-                        const notaData = {
-                            ...commonFields, // fecha, libro_folio, condicion, obs, obs_optativa...
-                            materia: materiaName,
-                            dni: row.dni,
-                            apellidos: row.apellidos,
-                            nombres: row.nombres,
-                            nota: row.nota,
-                            plan: plan, // <-- (FIX) Se asigna el plan correcto
-                            timestamp: Timestamp.now()
-                        };
-                        
-                        savePromises.push(addDoc(notasRef, notaData));
+                    // 3. Si existe tanto la materia como la matriculación, registrar
+                    if (foundMateria && foundMatricula) {
+                        savePromises.push(
+                            supabase.from('notas').insert([{
+                                matriculacion_id: foundMatricula.id,
+                                materia_id: foundMateria.id,
+                                calificacion: row.nota,
+                                condicion: commonFields.condicion,
+                                fecha: commonFields.fecha,
+                                libro_folio: commonFields.libro_folio,
+                                observaciones: commonFields.observaciones,
+                                obs_detalle: commonFields.obs_optativa_ensamble
+                            }])
+                        );
                         notaGuardadaParaEsteAlumno = true;
                     }
                 } // fin loop planes
@@ -2451,7 +2192,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
 
             // Esperar que todas las notas válidas se guarden
             await Promise.all(savePromises);
-            
+
             if (notasGuardadas > 0) {
                 showMessage(`Planilla procesada. ${notasGuardadas} notas guardadas exitosamente.`, false);
                 // (FIX) Usar showMessage para advertencias en lugar de alert
@@ -2462,7 +2203,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
             } else if (planillaRows.length > 0) {
                 showMessage("Se procesó la planilla, pero no se guardó ninguna nota.", true);
                 if (advertencias.length > 0) {
-                   setTimeout(() => showMessage(`ERRORES: ${advertencias.join('; ')}`, true), 100);
+                    setTimeout(() => showMessage(`ERRORES: ${advertencias.join('; ')}`, true), 100);
                 }
             } else {
                 showMessage("No había filas para procesar.", false);
@@ -2499,13 +2240,13 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
             {/* 1. Formulario de Datos Comunes */}
             <form onSubmit={handleSavePlanilla} className="p-6 bg-white rounded-lg shadow-md border space-y-4">
                 <h3 className="text-xl font-semibold text-gray-800">Cargar Planilla de Notas</h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Materia (Nombres Únicos) */}
                     <div>
                         <label htmlFor="materiaName" className="block text-sm font-medium text-gray-700">Materia</label>
-                        <select 
-                            id="materiaName" 
+                        <select
+                            id="materiaName"
                             name="materiaName"
                             value={commonData.materiaName}
                             onChange={handleMateriaChange}
@@ -2523,8 +2264,8 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                     {showObsField && (
                         <div>
                             <label htmlFor="obs_optativa_ensamble" className="block text-sm font-medium text-gray-700">Especifique Optativa/Ensamble</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 id="obs_optativa_ensamble"
                                 name="obs_optativa_ensamble"
                                 value={commonData.obs_optativa_ensamble}
@@ -2535,12 +2276,12 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                             />
                         </div>
                     )}
-                    
+
                     {/* Fecha */}
                     <div>
                         <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">Fecha</label>
-                        <input 
-                            type="date" 
+                        <input
+                            type="date"
                             id="fecha"
                             name="fecha"
                             value={commonData.fecha}
@@ -2553,8 +2294,8 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                     {/* Condición */}
                     <div>
                         <label htmlFor="condicion" className="block text-sm font-medium text-gray-700">Condición</label>
-                        <select 
-                            id="condicion" 
+                        <select
+                            id="condicion"
                             name="condicion"
                             value={commonData.condicion}
                             onChange={handleCommonChange}
@@ -2570,8 +2311,8 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                     {/* Libro/Folio */}
                     <div>
                         <label htmlFor="libro_folio" className="block text-sm font-medium text-gray-700">Libro y Folio</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="libro_folio"
                             name="libro_folio"
                             value={commonData.libro_folio}
@@ -2581,11 +2322,11 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                         />
                     </div>
                 </div>
-                
-                 {/* Observaciones */}
+
+                {/* Observaciones */}
                 <div>
                     <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700">Observaciones (para toda la planilla)</label>
-                    <textarea 
+                    <textarea
                         id="observaciones"
                         name="observaciones"
                         rows="2"
@@ -2602,16 +2343,16 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                 <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
                     <label htmlFor="studentCount" className="block text-sm font-medium text-gray-700">Número de Estudiantes en Planilla</label>
                     <div className="mt-1 flex space-x-2">
-                        <input 
-                            type="number" 
+                        <input
+                            type="number"
                             id="studentCount"
                             value={studentCount}
                             onChange={(e) => setStudentCount(e.target.value)}
                             className="w-48 rounded-md border-gray-300 shadow-sm p-3 border"
                             placeholder="Ej: 10"
                         />
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={handleGenerateRows}
                             className="font-medium py-3 px-5 rounded-lg shadow-md transition duration-200 bg-indigo-500 hover:bg-indigo-600 text-white"
                         >
@@ -2639,7 +2380,7 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                                         <tr key={row.id}>
                                             {/* DNI (Desplegable) */}
                                             <td className="px-2 py-1">
-                                                <select 
+                                                <select
                                                     value={row.dni}
                                                     onChange={(e) => handleRowChange(index, 'dni', e.target.value)}
                                                     className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
@@ -2652,26 +2393,26 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                                             </td>
                                             {/* Apellidos (Auto) */}
                                             <td className="px-2 py-1">
-                                                <input 
-                                                    type="text" 
-                                                    value={row.apellidos} 
+                                                <input
+                                                    type="text"
+                                                    value={row.apellidos}
                                                     className="w-full rounded-md p-2 bg-gray-100 border-gray-200"
-                                                    readOnly 
+                                                    readOnly
                                                 />
                                             </td>
                                             {/* Nombres (Auto) */}
                                             <td className="px-2 py-1">
-                                                <input 
-                                                    type="text" 
-                                                    value={row.nombres} 
+                                                <input
+                                                    type="text"
+                                                    value={row.nombres}
                                                     className="w-full rounded-md p-2 bg-gray-100 border-gray-200"
-                                                    readOnly 
+                                                    readOnly
                                                 />
                                             </td>
                                             {/* Nota (Editable) */}
                                             <td className="px-2 py-1">
-                                                <input 
-                                                    type="text" 
+                                                <input
+                                                    type="text"
                                                     value={row.nota}
                                                     onChange={(e) => handleRowChange(index, 'nota', e.target.value)}
                                                     className="w-full rounded-md border-gray-300 shadow-sm p-2 border"
@@ -2683,11 +2424,11 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
                                 </tbody>
                             </table>
                         </div>
-                        
+
                         {/* 4. Botón de Guardar Planilla */}
                         <div className="border-t pt-6 mt-6">
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 disabled={loading}
                                 className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                             >
@@ -2703,25 +2444,25 @@ const IngresarPlanilla = ({ db, appId, showMessage, materias, students, matricul
 /**
  * (NUEVO) Sub-Pestaña 4.3: Ingresar Analítico Completo
  */
-const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matriculaciones, notas }) => {
-    
+const IngresarAnalitico = ({ showMessage, materias, students, matriculaciones, notas }) => {
+
     const [step, setStep] = useState(1); // 1: DNI, 2: Plan, 3: Form
     const [dniSearch, setDniSearch] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
     const [saveLoading, setSaveLoading] = useState(false);
-    
+
     const [studentInfo, setStudentInfo] = useState(null); // Full student object
     const [foundPlans, setFoundPlans] = useState([]);
     const [selectedPlan, setSelectedPlan] = useState('');
-    
+
     // Almacena los datos del formulario: { materiaId: { nota: '', fecha: '', ... }, ... }
     const [gradeData, setGradeData] = useState({});
-    
+
     // Almacena la lista de materias filtrada y ordenada para el plan
     const [materiasDelPlan, setMateriasDelPlan] = useState([]);
 
     const materiasCondicionales = [
-        'optativa 1', 'optativa 2', 
+        'optativa 1', 'optativa 2',
         'ensamble 1', 'ensamble 2', 'ensamble 3', 'ensamble 4'
     ];
 
@@ -2734,7 +2475,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
     const handleDniSearch = async (e) => {
         e.preventDefault();
         if (!dniSearch) return showMessage("Ingrese un DNI.", true);
-        
+
         setSearchLoading(true);
         resetForm(false); // Limpiar datos, pero mantener DNI
 
@@ -2781,7 +2522,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
             if (anioA !== anioB) return anioA - anioB;
             return a.materia.localeCompare(b.materia);
         });
-        
+
         setMateriasDelPlan(materiasFiltradas);
 
         // 3. Pre-cargar notas existentes
@@ -2791,7 +2532,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
         for (const materia of materiasFiltradas) {
             // Buscar la nota por nombre de materia
             const nota = notasExistentes.find(n => n.materia === materia.materia);
-            
+
             initialGrades[materia.id] = {
                 materia: materia.materia,
                 anio: materia.anio,
@@ -2803,7 +2544,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
                 existingNoteId: nota ? nota.id : null // ID original para saber si actualizar o crear
             };
         }
-        
+
         setGradeData(initialGrades);
         setStep(3); // Mostrar formulario
         setSearchLoading(false);
@@ -2820,7 +2561,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
         }, {});
     }, [materiasDelPlan, step]);
 
-    const aniosOrdenados = Object.keys(materiasAgrupadas).sort((a,b) => a.localeCompare(b, undefined, { numeric: true }));
+    const aniosOrdenados = Object.keys(materiasAgrupadas).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
     // Manejar cambio en un campo de nota
     const handleGradeChange = (materiaId, e) => {
@@ -2839,53 +2580,56 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
         e.preventDefault();
         setSaveLoading(true);
 
-        const notasRef = collection(db, 'artifacts', appId, 'public', 'data', 'notas');
-        const promises = [];
+        const upsertData = [];
         let notasProcesadas = 0;
 
         try {
+            // 1. Encontrar la matriculación correspondiente
+            const matricula = matriculaciones.find(m => m.dni === studentInfo.dni && m.plan === selectedPlan);
+
+            if (!matricula) {
+                showMessage("No se encontró una matriculación activa para este alumno y plan.", true);
+                setSaveLoading(false);
+                return;
+            }
+
             for (const materiaId in gradeData) {
                 const grade = gradeData[materiaId];
 
                 // Solo procesar si se ingresó una calificación
                 if (grade.nota && grade.nota.trim() !== '') {
                     notasProcesadas++;
-                    
+
                     const dataToSave = {
-                        dni: studentInfo.dni,
-                        nombres: studentInfo.nombres,
-                        apellidos: studentInfo.apellidos,
-                        plan: selectedPlan,
-                        materia: grade.materia,
-                        anio: grade.anio,
-                        nota: grade.nota,
+                        matriculacion_id: matricula.id,
+                        materia_id: materiaId,
+                        calificacion: grade.nota,
                         fecha: grade.fecha,
                         condicion: grade.condicion,
                         libro_folio: grade.libro_folio,
-                        obs_optativa_ensamble: grade.obs_optativa_ensamble || '',
-                        observaciones: 'Ingresado por Analítico', // Observación genérica
-                        timestamp: Timestamp.now()
+                        obs_detalle: grade.obs_optativa_ensamble || '',
+                        observaciones: 'Ingresado por Analítico'
                     };
 
                     if (grade.existingNoteId) {
-                        // Actualizar nota existente
-                        const docRef = doc(notasRef, grade.existingNoteId);
-                        promises.push(setDoc(docRef, dataToSave, { merge: true }));
-                    } else {
-                        // Crear nota nueva
-                        promises.push(addDoc(notasRef, dataToSave));
+                        dataToSave.id = grade.existingNoteId; // Para upsert
                     }
+
+                    upsertData.push(dataToSave);
                 }
             }
 
-            await Promise.all(promises);
-            
-            if (notasProcesadas > 0) {
+            if (upsertData.length > 0) {
+                const { error } = await supabase
+                    .from('notas')
+                    .upsert(upsertData);
+
+                if (error) throw error;
                 showMessage(`Analítico guardado: ${notasProcesadas} notas fueron creadas/actualizadas.`, false);
             } else {
                 showMessage("No se ingresaron nuevas calificaciones para guardar.", false);
             }
-            
+
             resetForm(true); // Resetear todo
 
         } catch (error) {
@@ -2917,8 +2661,8 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
                 <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200 max-w-lg mx-auto">
                     <label htmlFor="dni_search_analitico" className="block text-sm font-medium text-gray-700">Ingrese DNI del estudiante</label>
                     <div className="mt-1 flex space-x-2">
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="dni_search_analitico"
                             value={dniSearch}
                             onChange={(e) => setDniSearch(e.target.value)}
@@ -2926,8 +2670,8 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
                             placeholder="Buscar DNI..."
                             required
                         />
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={searchLoading}
                             className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                         >
@@ -2971,7 +2715,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
 
                     <div className="border-t pt-4 space-y-4">
                         <p className="text-sm text-gray-600">Ingrese los datos de las materias a acreditar. Las materias sin calificación serán ignoradas. Las notas existentes se pre-cargan y pueden ser modificadas.</p>
-                        
+
                         {/* Cabeceras de la tabla */}
                         <div className="grid grid-cols-12 gap-x-2 px-2 pb-2 border-b font-medium text-sm text-gray-600">
                             <div className="col-span-3">Materia</div>
@@ -2990,18 +2734,18 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
                                     {materiasAgrupadas[anio].map(materia => {
                                         const grade = gradeData[materia.id];
                                         if (!grade) return null;
-                                        
+
                                         return (
                                             <div key={materia.id} className="grid grid-cols-12 gap-x-2 items-center p-2 hover:bg-gray-50 rounded">
                                                 {/* Nombre Materia */}
                                                 <div className="col-span-3 text-sm font-medium text-gray-800">
                                                     {materia.materia}
                                                 </div>
-                                                
+
                                                 {/* Obs Optativa/Ensamble */}
                                                 <div className="col-span-2">
                                                     {isMateriaCondicional(materia.materia) ? (
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             name="obs_optativa_ensamble"
                                                             value={grade.obs_optativa_ensamble}
@@ -3016,7 +2760,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
 
                                                 {/* Fecha */}
                                                 <div className="col-span-2">
-                                                    <input 
+                                                    <input
                                                         type="date"
                                                         name="fecha"
                                                         value={grade.fecha}
@@ -3027,7 +2771,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
 
                                                 {/* Condición */}
                                                 <div className="col-span-2">
-                                                    <select 
+                                                    <select
                                                         name="condicion"
                                                         value={grade.condicion}
                                                         onChange={(e) => handleGradeChange(materia.id, e)}
@@ -3038,10 +2782,10 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
                                                         <option>Examen</option>
                                                     </select>
                                                 </div>
-                                                
+
                                                 {/* Nota */}
                                                 <div className="col-span-1">
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         name="nota"
                                                         value={grade.nota}
@@ -3053,7 +2797,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
 
                                                 {/* Libro/Folio */}
                                                 <div className="col-span-2">
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         name="libro_folio"
                                                         value={grade.libro_folio}
@@ -3072,8 +2816,8 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
 
                     {/* Botón de Guardar */}
                     <div className="border-t pt-4">
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={saveLoading || searchLoading}
                             className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                         >
@@ -3089,7 +2833,7 @@ const IngresarAnalitico = ({ db, appId, showMessage, materias, students, matricu
 /**
  * Pestaña 1: Inscribir / Editar Estudiante
  */
-const InscribirEditarTab = ({ db, appId, showMessage, onStudentAdded, onStudentUpdated, snapshotToArray }) => {
+const InscribirEditarTab = ({ showMessage, onStudentAdded, onStudentUpdated, snapshotToArray }) => {
     const [dniSearch, setDniSearch] = useState('');
     const [foundStudent, setFoundStudent] = useState(null); // Almacena datos del estudiante encontrado (o datos para crear)
     const [searchState, setSearchState] = useState('idle'); // 'idle', 'loading', 'found', 'not_found'
@@ -3099,30 +2843,42 @@ const InscribirEditarTab = ({ db, appId, showMessage, onStudentAdded, onStudentU
     const handleDniSearch = async (e) => {
         e.preventDefault();
         if (!dniSearch) return showMessage("Ingrese un DNI.", true);
-        
+
         setSearchState('loading');
         setFoundStudent(null);
         setIsEditMode(false);
 
         try {
-            const studentRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-            const q = query(studentRef, where("dni", "==", dniSearch));
-            const querySnapshot = await getDocs(q);
+            const { data, error } = await supabase
+                .from('perfiles')
+                .select('*')
+                .eq('dni', dniSearch)
+                .single();
 
-            if (querySnapshot.empty) {
+            if (error || !data) {
                 // No encontrado, preparamos para crear
                 showMessage(`DNI ${dniSearch} no encontrado. Creando nuevo registro.`, false);
                 setSearchState('not_found');
-                // IMPORTANTE: Inicializar con TODOS los campos (para evitar error de 'undefined')
                 setFoundStudent({ ...defaultStudentData, dni: dniSearch });
                 setIsEditMode(false);
             } else {
                 // Encontrado, preparamos para editar
-                const studentData = querySnapshot.docs[0].data();
-                const studentId = querySnapshot.docs[0].id;
                 showMessage(`DNI ${dniSearch} encontrado. Cargando datos para edición.`, false);
                 setSearchState('found');
-                setFoundStudent({ id: studentId, ...studentData });
+                setFoundStudent({
+                    id: data.id,
+                    dni: data.dni,
+                    apellidos: data.apellido,
+                    nombres: data.nombre,
+                    email: data.email,
+                    direccion: data.direccion,
+                    ciudad: data.ciudad,
+                    telefono: data.telefono,
+                    telefonourgencias: data.telefono_urgencias,
+                    nacionalidad: data.nacionalidad,
+                    genero: data.genero,
+                    fechanacimiento: data.fecha_nacimiento
+                });
                 setIsEditMode(true);
             }
         } catch (error) {
@@ -3147,7 +2903,7 @@ const InscribirEditarTab = ({ db, appId, showMessage, onStudentAdded, onStudentU
         setDniSearch('');
         setSearchState('idle');
     };
-    
+
     // Cancelar (volver a buscar)
     const handleCancel = () => {
         setFoundStudent(null);
@@ -3158,14 +2914,14 @@ const InscribirEditarTab = ({ db, appId, showMessage, onStudentAdded, onStudentU
     return (
         <div id="gestion_estudiantes">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Gestión de Estudiantes</h2>
-            
+
             {/* Si no hay estudiante cargado, mostrar buscador */}
             {!foundStudent ? (
                 <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200 max-w-lg mx-auto">
                     <label htmlFor="dni_search" className="block text-sm font-medium text-gray-700">Ingrese DNI (sin puntos)</label>
                     <div className="mt-1 flex space-x-2">
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="dni_search"
                             value={dniSearch}
                             onChange={(e) => setDniSearch(e.target.value)}
@@ -3173,8 +2929,8 @@ const InscribirEditarTab = ({ db, appId, showMessage, onStudentAdded, onStudentU
                             placeholder="Buscar o Inscribir..."
                             required
                         />
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={searchState === 'loading'}
                             className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                         >
@@ -3184,7 +2940,7 @@ const InscribirEditarTab = ({ db, appId, showMessage, onStudentAdded, onStudentU
                 </form>
             ) : (
                 /* Si hay estudiante cargado (encontrado o nuevo), mostrar formulario */
-                <StudentForm 
+                <StudentForm
                     initialData={foundStudent}
                     onSubmit={handleStudentSubmit}
                     buttonLabel={isEditMode ? "Guardar Cambios" : "Inscribir Nuevo Estudiante"}
@@ -3209,7 +2965,7 @@ const ListadoEstudiantesTab = ({ students, deleteStudent }) => {
             // Si la zona horaria causa problemas, forzar UTC:
             const parts = fechaNacimiento.split('-');
             const cumple = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-            
+
             const hoy = new Date();
             let edad = hoy.getFullYear() - cumple.getFullYear();
             const m = hoy.getMonth() - cumple.getMonth();
@@ -3221,11 +2977,11 @@ const ListadoEstudiantesTab = ({ students, deleteStudent }) => {
             return 'Inválido';
         }
     };
-    
+
     return (
         <div id="listado_estudiantes">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Listado de Estudiantes ({students.length})</h2>
-             <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200 max-h-[70vh] overflow-y-auto">
+            <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200 max-h-[70vh] overflow-y-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-indigo-600 text-white sticky top-0">
                         <tr>
@@ -3250,7 +3006,7 @@ const ListadoEstudiantesTab = ({ students, deleteStudent }) => {
                                 <td className="px-3 py-3 text-sm text-gray-700">{student.telefono}</td>
                                 <td className="px-3 py-3 text-sm text-center text-gray-700">{calcularEdad(student.fechanacimiento)}</td>
                                 <td className="px-3 py-3 text-right">
-                                    <button 
+                                    <button
                                         onClick={() => deleteStudent(student.id, `${student.nombres} ${student.apellidos}`)}
                                         className="text-red-600 hover:text-red-900 font-semibold transition duration-150"
                                     >
@@ -3273,11 +3029,11 @@ const ListadoEstudiantesTab = ({ students, deleteStudent }) => {
 /**
  * Pestaña 2: Matricular Estudiante
  */
-const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculaciones, snapshotToArray }) => {
+const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones, snapshotToArray }) => {
     const [dniMatricula, setDniMatricula] = useState('');
     const [studentForMatricula, setStudentForMatricula] = useState(null); // Almacena {dni, nombres, apellidos}
     const [matriculaSearchState, setMatriculaSearchState] = useState('idle'); // 'idle', 'loading'
-    
+
     // Campos del formulario
     const [selectedInstrumentoId, setSelectedInstrumentoId] = useState('');
     const [selectedPlan, setSelectedPlan] = useState('');
@@ -3289,30 +3045,32 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
         return matriculaciones.filter(m => m.cicloLectivo === currentYear);
     }, [matriculaciones, currentYear]);
 
-    // Buscar estudiante por DNI (en 'students')
+    // Buscar estudiante por DNI (en 'perfiles' vía Supabase)
     const handleDniSearchMatricula = async (e) => {
         e.preventDefault();
         if (!dniMatricula) return showMessage("Ingrese un DNI.", true);
-        
+
         setMatriculaSearchState('loading');
         setStudentForMatricula(null);
 
         try {
-            const studentRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-            const q = query(studentRef, where("dni", "==", dniMatricula));
-            const querySnapshot = await getDocs(q);
+            const { data, error } = await supabase
+                .from('perfiles')
+                .select('id, nombre, apellido, dni')
+                .eq('dni', dniMatricula)
+                .single();
 
-            if (querySnapshot.empty) {
+            if (error || !data) {
                 showMessage(`DNI ${dniMatricula} no encontrado en la tabla de Estudiantes. Debe inscribirlo primero.`, true);
                 setMatriculaSearchState('idle');
             } else {
-                const data = querySnapshot.docs[0].data();
                 setStudentForMatricula({
+                    id: data.id,
                     dni: data.dni,
-                    nombres: data.nombres,
-                    apellidos: data.apellidos
+                    nombres: data.nombre,
+                    apellidos: data.apellido
                 });
-                showMessage(`Estudiante ${data.nombres} ${data.apellidos} encontrado.`, false);
+                showMessage(`Estudiante ${data.nombre} ${data.apellido} encontrado.`, false);
                 setMatriculaSearchState('found');
             }
         } catch (error) {
@@ -3337,40 +3095,38 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
     // Guardar Matriculación
     const handleMatriculaSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!selectedInstrumentoId || !studentForMatricula) {
             return showMessage("Error: Faltan datos (estudiante o instrumento).", true);
         }
 
         const instrumentoSeleccionado = instrumentos.find(i => i.id === selectedInstrumentoId);
 
-        const newMatricula = {
-            dni: studentForMatricula.dni,
-            apellidos: studentForMatricula.apellidos,
-            nombres: studentForMatricula.nombres,
-            instrumento: instrumentoSeleccionado.instrumento,
-            plan: instrumentoSeleccionado.plan,
-            cicloLectivo: currentYear,
-            fecha_matriculacion: currentDate,
-            timestamp: Timestamp.now()
-        };
-
         try {
             // (FIX) Validar contra la lista ya filtrada
             const yaExiste = matriculacionesDelAnio.some(
-                m => m.dni === newMatricula.dni && 
-                     m.instrumento === newMatricula.instrumento
+                m => m.dni === studentForMatricula.dni &&
+                    m.instrumento === selectedInstrumentoId // Comparar por ID
             );
-            
+
             if (yaExiste) {
-                return showMessage(`Error: ${newMatricula.nombres} ${newMatricula.apellidos} ya está matriculado/a en ${newMatricula.instrumento} este año.`, true);
+                return showMessage(`Error: ${studentForMatricula.nombres} ${studentForMatricula.apellidos} ya está matriculado/a en ${instrumentoSeleccionado.instrumento} este año.`, true);
             }
 
-            // Guardar
-            const matriculaRef = collection(db, 'artifacts', appId, 'public', 'data', 'matriculation');
-            await addDoc(matriculaRef, newMatricula);
-            showMessage(`Estudiante matriculado/a en ${newMatricula.instrumento} exitosamente.`, false);
-            
+            // Guardar en Supabase
+            const { error } = await supabase
+                .from('matriculaciones')
+                .insert([{
+                    estudiante_id: studentForMatricula.id,
+                    plan: selectedPlan,
+                    ciclo_lectivo: parseInt(currentYear),
+                    instrumento_id: selectedInstrumentoId
+                }]);
+
+            if (error) throw error;
+
+            showMessage(`Estudiante matriculado/a en ${instrumentoSeleccionado.instrumento} exitosamente.`, false);
+
             // Limpiar formulario
             setDniMatricula('');
             setStudentForMatricula(null);
@@ -3393,20 +3149,20 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
 
     return (
         <div id="matriculacion_estudiantes">
-            
+
             {/* Formulario de Búsqueda y Matriculación */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Columna 1: Formulario */}
                 <div>
                     <h2 className="text-2xl font-semibold text-gray-800 mb-4">Matricular Estudiante (Ciclo {currentYear})</h2>
-                    
+
                     {/* Paso 1: Buscador de DNI */}
                     {!studentForMatricula ? (
-                         <form onSubmit={handleDniSearchMatricula} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <form onSubmit={handleDniSearchMatricula} className="p-6 bg-indigo-50 rounded-lg border border-indigo-200">
                             <label htmlFor="dni_search_matricula" className="block text-sm font-medium text-gray-700">Ingrese DNI (sin puntos)</label>
                             <div className="mt-1 flex space-x-2">
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     id="dni_search_matricula"
                                     value={dniMatricula}
                                     onChange={(e) => setDniMatricula(e.target.value)}
@@ -3414,8 +3170,8 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
                                     placeholder="Buscar DNI en Estudiantes..."
                                     required
                                 />
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     disabled={matriculaSearchState === 'loading'}
                                     className="flex items-center justify-center font-bold py-3 px-5 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
                                 >
@@ -3434,7 +3190,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
                             {/* Selector de Instrumento */}
                             <div>
                                 <label htmlFor="instrumento_select" className="block text-sm font-medium text-gray-700">Seleccione Instrumento (y Plan)</label>
-                                <select 
+                                <select
                                     id="instrumento_select"
                                     value={selectedInstrumentoId}
                                     onChange={handleInstrumentoChange}
@@ -3456,18 +3212,18 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
                             <input type="text" value={`Plan: ${selectedPlan}`} disabled className="w-full rounded-md border-gray-300 p-3 bg-gray-100" />
                             <input type="text" value={`Ciclo Lectivo: ${currentYear}`} disabled className="w-full rounded-md border-gray-300 p-3 bg-gray-100" />
                             <input type="text" value={`Fecha: ${currentDate}`} disabled className="w-full rounded-md border-gray-300 p-3 bg-gray-100" />
-                            
+
                             {/* Acciones */}
                             <div className="flex space-x-3">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     onClick={handleCancelMatricula}
                                     className="w-1/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-gray-200 hover:bg-gray-300 text-gray-700"
                                 >
                                     Cancelar
                                 </button>
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     disabled={!selectedInstrumentoId}
                                     className="w-2/3 font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                                 >
@@ -3517,7 +3273,7 @@ const MatriculacionTab = ({ db, appId, showMessage, instrumentos, matriculacione
 /**
  * Pestaña 7: Admin Instrumentos
  */
-const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
+const InstrumentosTab = ({ showMessage, instrumentos }) => {
     const [instrumento, setInstrumento] = useState('');
     const [plan, setPlan] = useState('');
     const [loadingAdd, setLoadingAdd] = useState(false);
@@ -3533,7 +3289,7 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
         const nuevoPlanLower = plan.trim().toLowerCase();
 
         // Usamos .some() para ver si 'instrumentos' (el prop) ya tiene esta combinación
-        const yaExiste = instrumentos.some(i => 
+        const yaExiste = instrumentos.some(i =>
             i.instrumento.trim().toLowerCase() === nuevoInstrumentoLower &&
             i.plan.trim().toLowerCase() === nuevoPlanLower
         );
@@ -3545,14 +3301,15 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
         // --- Fin Verificación ---
         setLoadingAdd(true);
         try {
-            const newInstrumento = { 
-                instrumento: instrumento.trim(), 
-                plan: plan.trim(),
-                timestamp: Timestamp.now()
-            };
-            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'instrumentos');
-            await addDoc(colRef, newInstrumento);
-            
+            const { error } = await supabase
+                .from('instrumentos')
+                .insert([{
+                    nombre: instrumento.trim(),
+                    plan: plan.trim()
+                }]);
+
+            if (error) throw error;
+
             showMessage("Instrumento agregado exitosamente.", false);
             setInstrumento('');
             setPlan('');
@@ -3563,13 +3320,15 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
             setLoadingAdd(false);
         }
     };
-    
+
     const deleteInstrumento = async (id, nombre) => {
-        // ELIMINADO: if (!window.confirm(`¿Seguro que desea eliminar ${nombre}?`)) return;
-        
         try {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'instrumentos', id);
-            await deleteDoc(docRef);
+            const { error } = await supabase
+                .from('instrumentos')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
             showMessage("Instrumento eliminado.", false);
         } catch (error) {
             console.error("Error al eliminar instrumento:", error);
@@ -3580,15 +3339,15 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
     return (
         <div id="admin_instrumentos">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">Administración de Instrumentos</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Columna 1: Formulario */}
                 <form onSubmit={handleSubmit} className="md:col-span-1 p-6 bg-white rounded-lg shadow-md border space-y-4 h-fit">
                     <h3 className="text-lg font-semibold">Agregar Nuevo</h3>
                     <div>
                         <label htmlFor="instrumento" className="block text-sm font-medium text-gray-700">Nombre del Instrumento</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="instrumento"
                             value={instrumento}
                             onChange={(e) => setInstrumento(e.target.value)}
@@ -3599,8 +3358,8 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
                     </div>
                     <div>
                         <label htmlFor="plan" className="block text-sm font-medium text-gray-700">Plan de Estudio</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="plan"
                             value={plan}
                             onChange={(e) => setPlan(e.target.value)}
@@ -3609,8 +3368,8 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
                             required
                         />
                     </div>
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={loadingAdd}
                         className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                     >
@@ -3636,7 +3395,7 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
                                         <td className="px-3 py-3 text-sm text-gray-700">{i.instrumento}</td>
                                         <td className="px-3 py-3 text-sm text-gray-700">{i.plan}</td>
                                         <td className="px-3 py-3 text-right">
-                                            <button 
+                                            <button
                                                 onClick={() => deleteInstrumento(i.id, i.instrumento)}
                                                 className="text-red-600 hover:text-red-900 font-semibold transition duration-150"
                                             >
@@ -3661,7 +3420,7 @@ const InstrumentosTab = ({ db, appId, showMessage, instrumentos }) => {
 /**
  * Pestaña 8: Admin Materias
  */
-const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { // (NUEVO) Recibir deleteMateria
+const MateriasTab = ({ showMessage, materias, deleteMateria }) => { // (NUEVO) Recibir deleteMateria
     const [materia, setMateria] = useState('');
     const [plan, setPlan] = useState('');
     const [anio, setAnio] = useState('');
@@ -3679,7 +3438,7 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
         const nuevoAnioLower = anio.trim().toLowerCase();
 
         // Verificamos si la combinación de los 3 ya existe en 'materias' (el prop)
-        const yaExiste = materias.some(m => 
+        const yaExiste = materias.some(m =>
             m.materia.trim().toLowerCase() === nuevaMateriaLower &&
             m.plan.trim().toLowerCase() === nuevoPlanLower &&
             (m.anio ? m.anio.trim().toLowerCase() : '') === nuevoAnioLower
@@ -3692,15 +3451,16 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
         // --- Fin Verificación ---
         setLoadingAdd(true);
         try {
-            const newMateria = { 
-                materia: materia.trim(), 
-                plan: plan.trim(),
-                anio: anio.trim(),
-                timestamp: Timestamp.now()
-            };
-            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'materias');
-            await addDoc(colRef, newMateria);
-            
+            const { error } = await supabase
+                .from('materias')
+                .insert([{
+                    nombre: materia.trim(),
+                    plan: plan.trim(),
+                    anio: parseInt(anio)
+                }]);
+
+            if (error) throw error;
+
             showMessage("Materia agregada exitosamente.", false);
             setMateria('');
             setPlan('');
@@ -3712,35 +3472,20 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
             setLoadingAdd(false);
         }
     };
-    
-    // (FIX) Esta función AHORA se recibe por props.
-    /*
-    const deleteMateria = async (id, nombre) => {
-        if (!window.confirm(`¿Seguro que desea eliminar ${nombre}?`)) return;
-        
-        try {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'materias', id);
-            await deleteDoc(docRef);
-            showMessage("Materia eliminada.", false);
-        } catch (error) {
-            console.error("Error al eliminar materia:", error);
-            showMessage(`Error: ${error.message}`, true);
-        }
-    };
-    */
 
+    // (FIX) Esta función AHORA se recibe por props.
     return (
         <div id="admin_materias">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">Administración de Materias</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Columna 1: Formulario */}
                 <form onSubmit={handleSubmit} className="md:col-span-1 p-6 bg-white rounded-lg shadow-md border space-y-4 h-fit">
                     <h3 className="text-lg font-semibold">Agregar Nueva</h3>
                     <div>
                         <label htmlFor="materia_nombre" className="block text-sm font-medium text-gray-700">Nombre de la Materia</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="materia_nombre"
                             value={materia}
                             onChange={(e) => setMateria(e.target.value)}
@@ -3751,8 +3496,8 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
                     </div>
                     <div>
                         <label htmlFor="materia_plan" className="block text-sm font-medium text-gray-700">Plan de Estudio</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="materia_plan"
                             value={plan}
                             onChange={(e) => setPlan(e.target.value)}
@@ -3763,8 +3508,8 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
                     </div>
                     <div>
                         <label htmlFor="materia_anio" className="block text-sm font-medium text-gray-700">Año de Cursado</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             id="materia_anio"
                             value={anio}
                             onChange={(e) => setAnio(e.target.value)}
@@ -3773,8 +3518,8 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
                             required
                         />
                     </div>
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={loadingAdd}
                         className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                     >
@@ -3802,7 +3547,7 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
                                         <td className="px-3 py-3 text-sm text-gray-700">{m.materia}</td>
                                         <td className="px-3 py-3 text-sm text-center text-gray-700">{m.anio}</td>
                                         <td className="px-3 py-3 text-right">
-                                            <button 
+                                            <button
                                                 onClick={() => deleteMateria(m.id, m.materia)}
                                                 className="text-red-600 hover:text-red-900 font-semibold transition duration-150"
                                             >
@@ -3827,7 +3572,7 @@ const MateriasTab = ({ db, appId, showMessage, materias, deleteMateria }) => { /
 /**
  * (NUEVO) Pestaña 9: Carga Masiva de Datos
  */
-const CargaMasivaTab = ({ db, appId, showMessage }) => {
+const CargaMasivaTab = ({ showMessage }) => {
     const [jsonData, setJsonData] = useState('');
     const [collectionName, setCollectionName] = useState('materias');
     const [loading, setLoading] = useState(false);
@@ -3854,20 +3599,55 @@ const CargaMasivaTab = ({ db, appId, showMessage }) => {
         }
 
         try {
-            // 3. Preparar la carga
-            const colRef = collection(db, 'artifacts', appId, 'public', 'data', collectionName);
-            const promises = [];
-            
-            // 4. Crear una promesa de 'addDoc' por cada item en el array
-            data.forEach(item => {
-                const newItem = { ...item, timestamp: Timestamp.now() };
-                promises.push(addDoc(colRef, newItem));
-            });
-            
-            // 5. Esperar a que TODAS se completen
-            await Promise.all(promises);
+            // 3. Preparar la carga (Mapeo de Tablas)
+            const tableMap = {
+                'materias': 'materias',
+                'students': 'perfiles',
+                'instrumentos': 'instrumentos'
+            };
+            const tableName = tableMap[collectionName];
 
-            showMessage(`¡Éxito! Se cargaron ${data.length} nuevos documentos en '${collectionName}'.`, false);
+            if (!tableName) {
+                throw new Error(`La colección '${collectionName}' no está mapeada a Supabase.`);
+            }
+
+            // 4. Mapear campos si es necesario
+            let dataToInsert = data;
+            if (collectionName === 'students') {
+                dataToInsert = data.map(i => ({
+                    dni: i.dni,
+                    apellido: i.apellidos,
+                    nombre: i.nombres,
+                    email: i.email,
+                    direccion: i.direccion,
+                    ciudad: i.ciudad,
+                    telefono: i.telefono,
+                    telefono_urgencias: i.telefonourgencias,
+                    nacionalidad: i.nacionalidad,
+                    genero: i.genero,
+                    fecha_nacimiento: i.fechanacimiento
+                }));
+            } else if (collectionName === 'instrumentos') {
+                dataToInsert = data.map(i => ({
+                    nombre: i.instrumento,
+                    plan: i.plan
+                }));
+            } else if (collectionName === 'materias') {
+                dataToInsert = data.map(i => ({
+                    plan: i.plan,
+                    anio: parseInt(i.anio),
+                    nombre: i.materia
+                }));
+            }
+
+            // 5. Ejecutar la carga masiva en Supabase
+            const { error } = await supabase
+                .from(tableName)
+                .insert(dataToInsert);
+
+            if (error) throw error;
+
+            showMessage(`¡Éxito! Se cargaron ${data.length} nuevos registros en la tabla '${tableName}'.`, false);
             setJsonData(''); // Limpiar el campo
 
         } catch (error) {
@@ -3887,8 +3667,8 @@ const CargaMasivaTab = ({ db, appId, showMessage }) => {
                 <p className="text-sm text-gray-600">
                     Asegúrese de que los campos en su JSON coincidan con la colección.
                 </p>
-                
-                <select 
+
+                <select
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
@@ -3903,7 +3683,7 @@ const CargaMasivaTab = ({ db, appId, showMessage }) => {
                 <p className="text-sm text-gray-600">
                     Copie el resultado del convertidor CSV a JSON y péguelo aquí.
                 </p>
-                
+
                 <textarea
                     rows="10"
                     value={jsonData}
@@ -3914,8 +3694,8 @@ const CargaMasivaTab = ({ db, appId, showMessage }) => {
                 ></textarea>
 
                 <div className="border-t pt-4">
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={loading}
                         className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
                     >
@@ -3938,11 +3718,11 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
     const [studentInfo, setStudentInfo] = useState(null); // { dni, nombres, apellidos, genero }
     const [foundPlans, setFoundPlans] = useState([]); // [plan1, plan2]
     const [selectedPlan, setSelectedPlan] = useState('');
-    
+
     // --- (CAMBIO) Definir 'currentYear' aquí ---
     // Así, tanto 'handleDniSearch' como el 'return' (JSX) pueden usarlo.
     const currentYear = new Date().getFullYear().toString();
-    
+
     // Función para buscar DNI (basada en la lista de matriculaciones)
     const handleDniSearch = async (e) => {
         e.preventDefault();
@@ -3953,8 +3733,8 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
 
         try {
             // 1. Buscar Matriculaciones (usando la lista global)
-            const matriculasDelDNI = matriculaciones.filter(m => 
-                m.dni === dni && 
+            const matriculasDelDNI = matriculaciones.filter(m =>
+                m.dni === dni &&
                 m.cicloLectivo === currentYear
             );
 
@@ -3965,9 +3745,9 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
 
             // 2. Buscar Info del Estudiante (usando la lista global)
             const studentData = students.find(s => s.dni === dni);
-            
+
             const firstMatricula = matriculasDelDNI[0];
-            
+
             setStudentInfo({
                 dni: firstMatricula.dni,
                 nombres: firstMatricula.nombres,
@@ -3977,7 +3757,7 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
 
             // 3. Procesar planes
             const planesUnicos = [...new Set(matriculasDelDNI.map(m => m.plan))];
-            
+
             if (planesUnicos.length > 1) {
                 setFoundPlans(planesUnicos);
                 setStep(2); // Ir a selección de plan
@@ -3985,7 +3765,7 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
                 setSelectedPlan(planesUnicos[0]);
                 setStep(3); // Ir directo al certificado
             }
-            
+
         } catch (error) {
             console.error("Error buscando matrícula:", error);
             showMessage(`Error al consultar los datos: ${error.message}`, true);
@@ -3993,7 +3773,7 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
             setIsLoading(false);
         }
     };
-    
+
     // Manejar selección de plan
     const handlePlanSelect = (plan) => {
         setSelectedPlan(plan);
@@ -4008,74 +3788,74 @@ const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
         setFoundPlans([]);
         setSelectedPlan('');
     };
-    
-    return (
-      <div id="generar_certificado">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6">Generar Certificado de Alumno Regular</h2>
-        
-        <main className="w-full max-w-2xl p-8 bg-white rounded-xl shadow-lg border border-gray-200 mx-auto">
-            
-            {/* Paso 1: Pedir DNI */}
-            {step === 1 && (
-                <div>
-                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Buscar Estudiante Matriculado</h2>
-                    <form onSubmit={handleDniSearch} className="space-y-4">
-                        <div>
-                            {/* (CAMBIO) Esta línea ahora funciona */}
-                            <label htmlFor="dni_student_admin" className="block text-sm font-medium text-gray-700">Ingrese DNI (Ciclo {currentYear})</label>
-                            <input 
-                                type="text" 
-                                id="dni_student_admin"
-                                value={dni}
-                                onChange={(e) => setDni(e.target.value)}
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
-                                placeholder="Ej: 30123456"
-                                required
-                            />
-                        </div>
-                        <button 
-                            type="submit" 
-                            disabled={isLoading}
-                            className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
-                        >
-                            {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
-                            {isLoading ? "Buscando..." : "Buscar Matrícula"}
-                        </button>
-                    </form>
-                </div>
-            )}
-            
-            {/* Paso 2: Seleccionar Plan */}
-            {step === 2 && studentInfo && (
-                <div>
-                    <h2 className="text-2xl font-semibold text-gray-800 mb-5">Múltiples Planes</h2>
-                    <p className="text-gray-600 mb-4">El/La estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado/a en múltiples planes este año. Por favor, seleccione uno:</p>
-                    <div className="space-y-3">
-                        {foundPlans.map(plan => (
-                            <button
-                                key={plan}
-                                onClick={() => handlePlanSelect(plan)}
-                                className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300 font-medium"
-                            >
-                                {plan}
-                            </button>
-                        ))}
-                    </div>
-                    <button onClick={resetFlow} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver</button>
-                </div>
-            )}
-            
-            {/* Paso 3: Mostrar Certificado (Reutilizamos el componente 'CertificateDisplay') */}
-            {step === 3 && studentInfo && selectedPlan && (
-                <CertificateDisplay
-                    student={studentInfo}
-                    plan={selectedPlan}
-                    onCancel={resetFlow}
-                />
-            )}
 
-        </main>
-      </div>
+    return (
+        <div id="generar_certificado">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Generar Certificado de Alumno Regular</h2>
+
+            <main className="w-full max-w-2xl p-8 bg-white rounded-xl shadow-lg border border-gray-200 mx-auto">
+
+                {/* Paso 1: Pedir DNI */}
+                {step === 1 && (
+                    <div>
+                        <h2 className="text-2xl font-semibold text-gray-800 mb-5">Buscar Estudiante Matriculado</h2>
+                        <form onSubmit={handleDniSearch} className="space-y-4">
+                            <div>
+                                {/* (CAMBIO) Esta línea ahora funciona */}
+                                <label htmlFor="dni_student_admin" className="block text-sm font-medium text-gray-700">Ingrese DNI (Ciclo {currentYear})</label>
+                                <input
+                                    type="text"
+                                    id="dni_student_admin"
+                                    value={dni}
+                                    onChange={(e) => setDni(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"
+                                    placeholder="Ej: 30123456"
+                                    required
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={isLoading}
+                                className="w-full flex items-center justify-center font-bold py-3 px-4 rounded-lg shadow-lg transition duration-200 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400"
+                            >
+                                {isLoading ? <IconLoading /> : <IconCertificate className="w-5 h-5 mr-2" />}
+                                {isLoading ? "Buscando..." : "Buscar Matrícula"}
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* Paso 2: Seleccionar Plan */}
+                {step === 2 && studentInfo && (
+                    <div>
+                        <h2 className="text-2xl font-semibold text-gray-800 mb-5">Múltiples Planes</h2>
+                        <p className="text-gray-600 mb-4">El/La estudiante <strong>{studentInfo.nombres} {studentInfo.apellidos}</strong> está matriculado/a en múltiples planes este año. Por favor, seleccione uno:</p>
+                        <div className="space-y-3">
+                            {foundPlans.map(plan => (
+                                <button
+                                    key={plan}
+                                    onClick={() => handlePlanSelect(plan)}
+                                    className="w-full text-left p-4 bg-gray-100 rounded-lg hover:bg-indigo-100 border border-gray-300 font-medium"
+                                >
+                                    {plan}
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={resetFlow} className="mt-6 text-sm text-indigo-600 hover:text-indigo-800">&larr; Volver</button>
+                    </div>
+                )}
+
+                {/* Paso 3: Mostrar Certificado (Reutilizamos el componente 'CertificateDisplay') */}
+                {step === 3 && studentInfo && selectedPlan && (
+                    <CertificateDisplay
+                        student={studentInfo}
+                        plan={selectedPlan}
+                        onCancel={resetFlow}
+                    />
+                )}
+
+            </main>
+        </div>
     );
 };
 
@@ -4103,7 +3883,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         await onSubmit(formData);
         setFormLoading(false);
     };
-    
+
     // Definición de campos para el formulario
     const fields = [
         { name: 'dni', label: 'DNI (sin puntos)', type: 'text', required: true, disabled: isEdit },
@@ -4123,9 +3903,9 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         <form onSubmit={handleSubmit} className="p-6 bg-white rounded-lg shadow-md border space-y-4 max-w-4xl mx-auto">
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-semibold text-gray-800">{isEdit ? "Editando Estudiante" : "Inscribir Nuevo Estudiante"}</h3>
-                <p className="text-sm text-gray-600">ID (Firestore): {initialData.id || 'N/A'}</p>
+                <p className="text-sm text-gray-600">ID: {initialData.id || 'N/A'}</p>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
                 {fields.map(field => (
                     <div key={field.name}>
@@ -4146,7 +3926,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
                                 ))}
                             </select>
                         ) : (
-                            <input 
+                            <input
                                 type={field.type}
                                 id={field.name}
                                 name={field.name}
@@ -4163,16 +3943,16 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
 
             {/* Acciones */}
             <div className="flex space-x-3 border-t pt-4">
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     onClick={onCancel}
                     disabled={formLoading}
                     className="w-1/3 font-semibold py-3 px-4 rounded-lg shadow-sm transition duration-200 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300"
                 >
                     Cancelar
                 </button>
-                <button 
-                    type="submit" 
+                <button
+                    type="submit"
                     disabled={formLoading}
                     className={`w-2/3 font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 text-white ${isEdit ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'} ${formLoading ? 'bg-gray-400' : ''}`}
                 >
