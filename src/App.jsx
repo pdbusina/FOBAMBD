@@ -91,6 +91,22 @@ export default function App() {
     const [message, setMessage] = useState({ text: "", isError: false });
     const [userClaims, setUserClaims] = useState(null);
 
+    const loadMatriculaciones = useCallback(async () => {
+        const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles!estudiante_id(dni, apellido, nombre), instrumentos(nombre, plan)');
+        if (matric) {
+            setMatriculaciones(matric.map(m => ({
+                id: m.id,
+                dni: m.perfiles?.dni,
+                apellidos: m.perfiles?.apellido,
+                nombres: m.perfiles?.nombre,
+                plan: m.plan || m.instrumentos?.plan || "Sin Plan",
+                cicloLectivo: m.ciclo_lectivo?.toString() || "",
+                instrumentoId: m.instrumento_id,
+                instrumento: m.instrumentos?.nombre || "No asignado"
+            })).sort((a, b) => (a.apellidos || "").localeCompare(b.apellidos || "") || (a.nombres || "").localeCompare(b.nombres || "")));
+        }
+    }, []);
+
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
@@ -107,16 +123,19 @@ export default function App() {
             } else {
                 setUserId(null);
                 setUserClaims(null);
+                setAppState('landing'); // Volver al inicio al cerrar sesión
             }
         });
 
         return () => subscription.unsubscribe();
     }, []);
 
+
     useEffect(() => {
         if (!userId) return;
 
         const loadData = async () => {
+
             const { data: profiles } = await supabase.from('perfiles').select('*');
             if (profiles) {
                 setStudents(profiles.map(p => ({
@@ -141,20 +160,7 @@ export default function App() {
                 setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
             }
 
-            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles!estudiante_id(dni, apellido, nombre), instrumentos(nombre, plan)');
-            if (matric) {
-                setMatriculaciones(matric.map(m => ({
-                    id: m.id,
-                    dni: m.perfiles?.dni,
-                    apellidos: m.perfiles?.apellido,
-                    nombres: m.perfiles?.nombre,
-                    plan: m.plan || m.instrumentos?.plan || "Sin Plan",
-                    cicloLectivo: m.ciclo_lectivo?.toString() || "",
-                    instrumentoId: m.instrumento_id,
-                    instrumento: m.instrumentos?.nombre || "No asignado"
-                })));
-            }
-
+            await loadMatriculaciones();
 
             const { data: nts } = await supabase.from('notas').select('*, perfiles!estudiante_id(dni), materias(nombre)');
             if (nts) {
@@ -164,8 +170,20 @@ export default function App() {
                     libro_folio: n.libro_folio, observaciones: n.observaciones, obs_optativa_ensamble: n.obs_detalle
                 })));
             }
-
         };
+
+        const contextValue = {
+            students,
+            instrumentos,
+            materias,
+            matriculaciones,
+            notas,
+            addStudent,
+            updateStudent,
+            deleteStudent,
+            loadMatriculaciones // Agregamos esto al contexto o prop
+        };
+
 
         loadData();
 
@@ -173,9 +191,10 @@ export default function App() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles' }, () => loadData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'instrumentos' }, () => loadData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'materias' }, () => loadData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculaciones' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculaciones' }, () => loadMatriculaciones())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, () => loadData())
             .subscribe();
+
 
         return () => supabase.removeChannel(channel);
     }, [userId]);
@@ -287,7 +306,9 @@ export default function App() {
                     addStudent={addStudent} updateStudent={updateStudent} deleteStudent={deleteStudent}
                     matriculaciones={matriculaciones} materias={materias} notas={notas}
                     deleteMateria={deleteMateria} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab}
+                    loadMatriculaciones={loadMatriculaciones}
                 />
+
             )}
 
             {appState === 'student_analitico' &&

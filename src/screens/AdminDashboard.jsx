@@ -18,8 +18,11 @@ const defaultStudentData = {
 export const AdminDashboardScreen = ({
     userClaims, navigateTo, activeTab, handleTabChange, showMessage,
     userId, students, instrumentos, addStudent, updateStudent, deleteStudent,
-    matriculaciones, materias, notas, deleteMateria, notasSubTab, setNotasSubTab
+    matriculaciones, materias, notas, deleteMateria, notasSubTab, setNotasSubTab,
+    loadMatriculaciones
 }) => {
+
+
     return (
         <div className="flex flex-col min-h-screen">
             <header className="bg-indigo-700 text-white p-4 shadow-md flex justify-between items-center no-print">
@@ -55,7 +58,8 @@ export const AdminDashboardScreen = ({
 
                 <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
                     {activeTab === 'inscribir' && <InscribirEditarTab showMessage={showMessage} onStudentAdded={addStudent} onStudentUpdated={updateStudent} />}
-                    {activeTab === 'matricular' && <MatriculacionTab showMessage={showMessage} instrumentos={instrumentos} matriculaciones={matriculaciones} />}
+                    {activeTab === 'matricular' && <MatriculacionTab showMessage={showMessage} instrumentos={instrumentos} matriculaciones={matriculaciones} loadMatriculaciones={loadMatriculaciones} />}
+
                     {activeTab === 'listado' && <ListadoEstudiantesTab students={students} deleteStudent={deleteStudent} />}
                     {activeTab === 'notas' && <NotasTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab} />}
                     {activeTab === 'analitico' && <AnaliticoTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} />}
@@ -202,7 +206,8 @@ export const ListadoEstudiantesTab = ({ students, deleteStudent }) => {
     );
 };
 
-export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones }) => {
+export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones, loadMatriculaciones }) => {
+
     const [dniMatricula, setDniMatricula] = useState('');
     const [studentForMatricula, setStudentForMatricula] = useState(null);
     const [matriculaSearchState, setMatriculaSearchState] = useState('idle');
@@ -236,8 +241,10 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones })
 
         if (!error) {
             showMessage("Matriculación exitosa.", false);
+            loadMatriculaciones(); // Refresco instantáneo
             setDniMatricula(''); setStudentForMatricula(null); setSelectedInstrumentoId(''); setSelectedPlan(''); setMatriculaSearchState('idle');
         } else {
+
             showMessage(`Error al matricular: ${error.message}`, true);
         }
     };
