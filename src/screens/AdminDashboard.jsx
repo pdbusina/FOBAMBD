@@ -228,11 +228,12 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones })
     const handleMatriculaSubmit = async (e) => {
         e.preventDefault();
         const { error } = await supabase.from('matriculaciones').insert([{
-            perfil_id: studentForMatricula.id,
+            estudiante_id: studentForMatricula.id,
             plan: selectedPlan,
             ciclo_lectivo: parseInt(currentYear),
             instrumento_id: selectedInstrumentoId
         }]);
+
         if (!error) {
             showMessage("Matriculación exitosa.", false);
             setDniMatricula(''); setStudentForMatricula(null); setSelectedInstrumentoId(''); setSelectedPlan(''); setMatriculaSearchState('idle');

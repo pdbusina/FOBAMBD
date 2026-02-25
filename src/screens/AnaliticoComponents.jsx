@@ -56,13 +56,15 @@ export const AnaliticoTab = ({
             const { data: matriculas } = await supabase
                 .from('matriculaciones')
                 .select('plan')
-                .eq('perfil_id', studentData.id);
+                .eq('estudiante_id', studentData.id);
+
 
             // 3. Buscar Notas del estudiante (también para ver planes históricos)
             const { data: nts } = await supabase
                 .from('notas')
                 .select('*, materias(nombre, plan)')
-                .eq('perfil_id', studentData.id);
+                .eq('estudiante_id', studentData.id);
+
 
             const plansFromMatriculas = matriculas ? matriculas.map(m => m.plan) : [];
             const plansFromNotas = nts ? nts.map(n => n.materias?.plan).filter(Boolean) : [];

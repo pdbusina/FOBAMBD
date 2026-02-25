@@ -39,8 +39,9 @@ export const StudentAccessScreen = ({ navigateTo, db, appId, showMessage, studen
             const { data: matriculasDelDNI, error: matriculaError } = await db
                 .from('matriculaciones')
                 .select('*')
-                .eq('perfil_id', studentData.id)
+                .eq('estudiante_id', studentData.id)
                 .eq('ciclo_lectivo', parseInt(currentYear));
+
 
             if (matriculaError || !matriculasDelDNI || matriculasDelDNI.length === 0) {
                 console.error("Error buscando matrícula:", matriculaError);
