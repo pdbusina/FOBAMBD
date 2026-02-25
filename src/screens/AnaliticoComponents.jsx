@@ -195,7 +195,9 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
         );
 
         let materiasConNotas = materiasDelPlan.map(materia => {
-            const notaEncontrada = notasAprobadas.find(n => n.materia === materia.materia);
+            const notaEncontrada = notasAprobadas.find(n =>
+                n.materia?.trim().toLowerCase() === materia.materia?.trim().toLowerCase()
+            );
             return {
                 ...materia,
                 notaData: notaEncontrada || null
@@ -208,10 +210,11 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
         const findMateriaAprobada = (nombreMateria) => {
             return materiasConNotas.find(m =>
                 String(m.anio) === '1' &&
-                m.materia.toLowerCase() === nombreMateria &&
+                m.materia?.trim().toLowerCase() === nombreMateria.trim().toLowerCase() &&
                 m.notaData != null
             );
         };
+
 
         const ecAprobada = findMateriaAprobada(EC_NAME);
         const dfAprobada = findMateriaAprobada(DF_NAME);

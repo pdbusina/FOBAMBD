@@ -141,15 +141,15 @@ export default function App() {
                 setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
             }
 
-            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles(dni, apellido, nombre), instrumentos(nombre)');
+            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles(dni, apellido, nombre), instrumentos(nombre, plan)');
             if (matric) {
                 setMatriculaciones(matric.map(m => ({
                     id: m.id,
                     dni: m.perfiles?.dni,
                     apellidos: m.perfiles?.apellido,
                     nombres: m.perfiles?.nombre,
-                    plan: m.plan,
-                    cicloLectivo: m.ciclo_levito?.toString() || m.ciclo_lectivo?.toString(),
+                    plan: m.plan || m.instrumentos?.plan || "Sin Plan",
+                    cicloLectivo: m.ciclo_lectivo?.toString() || "",
                     instrumentoId: m.instrumento_id,
                     instrumento: m.instrumentos?.nombre || "No asignado"
                 })));

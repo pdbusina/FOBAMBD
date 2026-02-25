@@ -209,12 +209,20 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones })
 
     const handleMatriculaSubmit = async (e) => {
         e.preventDefault();
-        const { error } = await supabase.from('matriculaciones').insert([{ estudiante_id: studentForMatricula.id, plan: selectedPlan, ciclo_lectivo: parseInt(currentYear), instrumento_id: selectedInstrumentoId }]);
+        const { error } = await supabase.from('matriculaciones').insert([{
+            perfil_id: studentForMatricula.id,
+            plan: selectedPlan,
+            ciclo_lectivo: parseInt(currentYear),
+            instrumento_id: selectedInstrumentoId
+        }]);
         if (!error) {
             showMessage("Matriculación exitosa.", false);
             setDniMatricula(''); setStudentForMatricula(null); setSelectedInstrumentoId(''); setSelectedPlan(''); setMatriculaSearchState('idle');
+        } else {
+            showMessage(`Error al matricular: ${error.message}`, true);
         }
     };
+
 
     return (
         <div id="matriculacion_estudiantes">
@@ -297,7 +305,8 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
             </div>
             {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} />}
             {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} />}
-            {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} />}
+            {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notes={notas} />}
+
         </div>
     );
 };
@@ -337,14 +346,81 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
 };
 
 const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones }) => {
-    /* Implementación original simplificada */
-    return <div className="p-6 bg-white border rounded">Sub-pestaña Planilla (Modularizando...)</div>;
+    const [selectedMateriaId, setSelectedMateriaId] = useState('');
+    const [planillaData, setPlanillaData] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (selectedMateriaId) {
+            const materia = materias.find(m => m.id === selectedMateriaId);
+            const alumnosMatriculados = matriculaciones.filter(m => m.plan === materia.plan);
+            setPlanillaData(alumnosMatriculados.map(a => ({
+                id: a.id,
+                dni: a.dni,
+                nombreCompleto: `${a.apellidos}, ${a.nombres}`,
+                nota: '',
+                condicion: 'Promoción'
+            })));
+        }
+    }, [selectedMateriaId, materias, matriculaciones]);
+
+    const handleSavePlanilla = async () => {
+        setLoading(true);
+        const recordsToInsert = planillaData.filter(p => p.nota !== '').map(p => ({
+            matriculacion_id: p.id,
+            materia_id: selectedMateriaId,
+            calificacion: p.nota,
+            condicion: p.condicion,
+            fecha: new Date().toISOString().split('T')[0]
+        }));
+
+        if (recordsToInsert.length === 0) { showMessage("No hay notas para cargar.", true); setLoading(false); return; }
+
+        const { error } = await supabase.from('notas').insert(recordsToInsert);
+        if (!error) { showMessage("Planilla cargada con éxito.", false); setPlanillaData([]); setSelectedMateriaId(''); }
+        else { showMessage(`Error: ${error.message}`, true); }
+        setLoading(false);
+    };
+
+    return (
+        <div className="space-y-4">
+            <select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded">
+                <option value="">Seleccione Materia...</option>
+                {materias.map(m => <option key={m.id} value={m.id}>({m.plan}) {m.nombre} - {m.anio}° Año</option>)}
+            </select>
+            {selectedMateriaId && planillaData.length > 0 && (
+                <div className="bg-white border rounded shadow-md overflow-hidden">
+                    <table className="min-w-full text-sm">
+                        <thead className="bg-gray-100 italic"><tr><th className="p-2 text-left">Alumno</th><th className="p-2 text-center w-24">Nota</th><th className="p-2 text-left w-40">Condición</th></tr></thead>
+                        <tbody>
+                            {planillaData.map((p, idx) => (
+                                <tr key={p.id}>
+                                    <td className="p-2 border-b">{p.nombreCompleto}</td>
+                                    <td className="p-2 border-b text-center"><input type="text" value={p.nota} onChange={(e) => { const nd = [...planillaData]; nd[idx].nota = e.target.value; setPlanillaData(nd); }} className="w-16 border rounded p-1 text-center" /></td>
+                                    <td className="p-2 border-b">
+                                        <select value={p.condicion} onChange={(e) => { const nd = [...planillaData]; nd[idx].condicion = e.target.value; setPlanillaData(nd); }} className="w-full border rounded p-1">
+                                            <option value="Promoción">Promoción</option><option value="Examen">Examen</option><option value="Regular">Regular</option><option value="Equivalencia">Equivalencia</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    <button onClick={handleSavePlanilla} disabled={loading} className="w-full bg-indigo-600 text-white py-3 font-bold hover:bg-indigo-700 disabled:bg-gray-400">
+                        {loading ? 'Guardando...' : 'Guardar Planilla'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
 };
 
-const IngresarAnalitico = ({ showMessage, materias, students, matriculaciones, notas }) => {
-    /* Implementación original simplificada */
-    return <div className="p-6 bg-white border rounded">Sub-pestaña Analítico Completo (Modularizando...)</div>;
+const IngresarAnalitico = ({ showMessage, materias, students, matriculaciones, notes }) => {
+    return <div className="p-6 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
+        <p><strong>Nota:</strong> Para cargar el analítico completo, use la herramienta de <strong>Carga Masiva</strong> con formato JSON o utilice <strong>Ingresar Nota</strong> individualmente para cada materia histórica.</p>
+    </div>;
 };
+
 
 export const InstrumentosTab = ({ showMessage, instrumentos }) => {
     const [instrumento, setInstrumento] = useState('');
