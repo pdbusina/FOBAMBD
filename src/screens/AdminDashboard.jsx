@@ -77,23 +77,33 @@ export const InscribirEditarTab = ({ showMessage, onStudentAdded, onStudentUpdat
 
     const handleDniSearch = async (e) => {
         e.preventDefault();
-        if (!dniSearch) return showMessage("Ingrese un DNI.", true);
+        const cleanDni = dniSearch.replace(/\D/g, '');
+        if (!cleanDni) return showMessage("Ingrese un DNI válido.", true);
+
         setSearchState('loading');
         try {
-            const { data, error } = await supabase.from('perfiles').select('*').eq('dni', dniSearch).single();
+            const { data, error } = await supabase.from('perfiles').select('*').eq('dni', cleanDni).single();
             if (error || !data) {
-                showMessage(`DNI ${dniSearch} no encontrado. Creando nuevo registro.`, false);
+                showMessage(`DNI ${cleanDni} no encontrado. Creando nuevo registro.`, false);
                 setSearchState('not_found');
-                setFoundStudent({ ...defaultStudentData, dni: dniSearch });
+                setFoundStudent({ ...defaultStudentData, dni: cleanDni });
                 setIsEditMode(false);
             } else {
-                showMessage(`DNI ${dniSearch} encontrado.`, false);
+                showMessage(`DNI ${cleanDni} encontrado.`, false);
                 setSearchState('found');
                 setFoundStudent({
-                    id: data.id, dni: data.dni, apellidos: data.apellido, nombres: data.nombre,
-                    email: data.email, direccion: data.direccion, ciudad: data.ciudad,
-                    telefono: data.telefono, telefonourgencias: data.telefono_urgencias,
-                    nacionalidad: data.nacionalidad, genero: data.genero, fechanacimiento: data.fecha_nacimiento
+                    id: data.id,
+                    dni: data.dni,
+                    apellidos: data.apellido || "",
+                    nombres: data.nombre || "",
+                    email: data.email || "",
+                    direccion: data.direccion || "",
+                    ciudad: data.ciudad || "",
+                    telefono: data.telefono || "",
+                    telefonourgencias: data.telefono_urgencias || "",
+                    nacionalidad: data.nacionalidad || "",
+                    genero: data.genero || "Masculino",
+                    fechanacimiento: data.fecha_nacimiento || ""
                 });
                 setIsEditMode(true);
             }
@@ -103,15 +113,23 @@ export const InscribirEditarTab = ({ showMessage, onStudentAdded, onStudentUpdat
         }
     };
 
+
     const handleStudentSubmit = async (formData) => {
+        let result;
         if (isEditMode) {
             const { id, ...dataToUpdate } = formData;
-            await onStudentUpdated(id, dataToUpdate);
+            result = await onStudentUpdated(id, dataToUpdate);
         } else {
-            await onStudentAdded(formData);
+            result = await onStudentAdded(formData);
         }
-        setFoundStudent(null); setDniSearch(''); setSearchState('idle');
+
+        if (result && result.success) {
+            setFoundStudent(null);
+            setDniSearch('');
+            setSearchState('idle');
+        }
     };
+
 
     return (
         <div id="gestion_estudiantes">
@@ -542,7 +560,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         { name: 'apellidos', label: 'Apellidos', type: 'text', required: true },
         { name: 'nombres', label: 'Nombres', type: 'text', required: true },
         { name: 'email', label: 'Email', type: 'email', required: true },
-        { name: 'fechanacimiento', label: 'Fecha de Nacimiento', type: 'date', required: true },
+        { name: 'fechanacimiento', label: 'Fecha de Nacimiento', type: 'date', required: false },
         { name: 'genero', label: 'Género', type: 'select', required: true, options: ['Masculino', 'Femenino', 'Otro'] },
         { name: 'nacionalidad', label: 'Nacionalidad', type: 'text', required: false },
         { name: 'direccion', label: 'Dirección', type: 'text', required: false },
@@ -550,6 +568,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
         { name: 'telefono', label: 'Teléfono', type: 'text', required: false },
         { name: 'telefonourgencias', label: 'Teléfono Urgencias', type: 'text', required: false },
     ];
+
 
 
     const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };

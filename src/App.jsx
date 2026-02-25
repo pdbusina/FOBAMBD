@@ -187,25 +187,50 @@ export default function App() {
     };
 
     const addStudent = async (formData) => {
-        const { id, ...dataToInsert } = formData;
         const { error } = await supabase.from('perfiles').insert([{
-            dni: formData.dni, apellido: formData.apellidos, nombre: formData.nombres,
-            email: formData.email, direccion: formData.direccion, ciudad: formData.ciudad,
-            telefono: formData.telefono, telefono_urgencias: formData.telefonourgencias,
-            nacionalidad: formData.nacionalidad, genero: formData.genero, fecha_nacimiento: formData.fechanacimiento
+            dni: formData.dni.replace(/\D/g, ''),
+            apellido: formData.apellidos,
+            nombre: formData.nombres,
+            email: formData.email,
+            direccion: formData.direccion || "",
+            ciudad: formData.ciudad || "",
+            telefono: formData.telefono || "",
+            telefono_urgencias: formData.telefonourgencias || "",
+            nacionalidad: formData.nacionalidad || "",
+            genero: formData.genero || "Otro",
+            fecha_nacimiento: formData.fechanacimiento || null
         }]);
-        if (error) showMessage(error.message, true); else showMessage("Estudiante agregado.", false);
+        if (error) {
+            showMessage(error.message, true);
+            return { success: false, error };
+        } else {
+            showMessage("Estudiante agregado.", false);
+            return { success: true };
+        }
     };
 
     const updateStudent = async (id, dataToUpdate) => {
         const { error } = await supabase.from('perfiles').update({
-            apellido: dataToUpdate.apellidos, nombre: dataToUpdate.nombres,
-            email: dataToUpdate.email, direccion: dataToUpdate.direccion, ciudad: dataToUpdate.ciudad,
-            telefono: dataToUpdate.telefono, telefono_urgencias: dataToUpdate.telefonourgencias,
-            nacionalidad: dataToUpdate.nacionalidad, genero: dataToUpdate.genero, fecha_nacimiento: dataToUpdate.fechanacimiento
+            apellido: dataToUpdate.apellidos,
+            nombre: dataToUpdate.nombres,
+            email: dataToUpdate.email,
+            direccion: dataToUpdate.direccion || "",
+            ciudad: dataToUpdate.ciudad || "",
+            telefono: dataToUpdate.telefono || "",
+            telefono_urgencias: dataToUpdate.telefonourgencias || "",
+            nacionalidad: dataToUpdate.nacionalidad || "",
+            genero: dataToUpdate.genero || "Otro",
+            fecha_nacimiento: dataToUpdate.fechanacimiento || null
         }).eq('id', id);
-        if (error) showMessage(error.message, true); else showMessage("Estudiante actualizado.", false);
+        if (error) {
+            showMessage(error.message, true);
+            return { success: false, error };
+        } else {
+            showMessage("Estudiante actualizado.", false);
+            return { success: true };
+        }
     };
+
 
     const deleteStudent = async (id, nombre) => {
         if (!window.confirm(`¿Confirmas eliminar a ${nombre}?`)) return;
