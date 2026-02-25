@@ -187,19 +187,21 @@ export default function App() {
     };
 
     const addStudent = async (formData) => {
-        const { error } = await supabase.from('perfiles').insert([{
+        const studentData = {
             dni: formData.dni.replace(/\D/g, ''),
             apellido: formData.apellidos,
             nombre: formData.nombres,
             email: formData.email,
-            direccion: formData.direccion || "",
-            ciudad: formData.ciudad || "",
-            telefono: formData.telefono || "",
-            telefono_urgencias: formData.telefonourgencias || "",
-            nacionalidad: formData.nacionalidad || "",
-            genero: formData.genero || "Otro",
-            fecha_nacimiento: formData.fechanacimiento || null
-        }]);
+            genero: formData.genero || "Otro"
+        };
+        if (formData.direccion) studentData.direccion = formData.direccion;
+        if (formData.ciudad) studentData.ciudad = formData.ciudad;
+        if (formData.telefono) studentData.telefono = formData.telefono;
+        if (formData.telefonourgencias) studentData.telefono_urgencias = formData.telefonourgencias;
+        if (formData.nacionalidad) studentData.nacionalidad = formData.nacionalidad;
+        if (formData.fechanacimiento) studentData.fecha_nacimiento = formData.fechanacimiento;
+
+        const { error } = await supabase.from('perfiles').insert([studentData]);
         if (error) {
             showMessage(error.message, true);
             return { success: false, error };
@@ -210,18 +212,22 @@ export default function App() {
     };
 
     const updateStudent = async (id, dataToUpdate) => {
-        const { error } = await supabase.from('perfiles').update({
+        const studentData = {
             apellido: dataToUpdate.apellidos,
             nombre: dataToUpdate.nombres,
             email: dataToUpdate.email,
-            direccion: dataToUpdate.direccion || "",
-            ciudad: dataToUpdate.ciudad || "",
-            telefono: dataToUpdate.telefono || "",
-            telefono_urgencias: dataToUpdate.telefonourgencias || "",
-            nacionalidad: dataToUpdate.nacionalidad || "",
-            genero: dataToUpdate.genero || "Otro",
-            fecha_nacimiento: dataToUpdate.fechanacimiento || null
-        }).eq('id', id);
+            genero: dataToUpdate.genero || "Otro"
+        };
+        if (dataToUpdate.direccion !== undefined) studentData.direccion = dataToUpdate.direccion || "";
+        if (dataToUpdate.ciudad !== undefined) studentData.ciudad = dataToUpdate.ciudad || "";
+        if (dataToUpdate.telefono !== undefined) studentData.telefono = dataToUpdate.telefono || "";
+        if (dataToUpdate.telefonourgencias !== undefined) studentData.telefono_urgencias = dataToUpdate.telefonourgencias || "";
+        if (dataToUpdate.nacionalidad !== undefined) studentData.nacionalidad = dataToUpdate.nacionalidad || "";
+        if (dataToUpdate.fechanacimiento !== undefined) {
+            studentData.fecha_nacimiento = dataToUpdate.fechanacimiento || null;
+        }
+
+        const { error } = await supabase.from('perfiles').update(studentData).eq('id', id);
         if (error) {
             showMessage(error.message, true);
             return { success: false, error };
@@ -230,6 +236,7 @@ export default function App() {
             return { success: true };
         }
     };
+
 
 
     const deleteStudent = async (id, nombre) => {

@@ -577,14 +577,25 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {fields.map(f => (
                     <div key={f.name}>
-                        <label className="block text-sm font-medium">{f.label}</label>
+                        <label className="block text-sm font-medium">
+                            {f.label} {!f.required && <span className="text-gray-400 font-normal">(Opcional)</span>}
+                        </label>
+
                         {f.type === 'select' ? (
                             <select value={formData[f.name]} onChange={(e) => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full border p-3 rounded">
                                 {f.options.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                         ) : (
-                            <input type={f.type} value={formData[f.name]} onChange={(e) => setFormData({ ...formData, [f.name]: e.target.value })} disabled={f.disabled} className="w-full border p-3 rounded" required={f.required} />
+                            <input
+                                type={f.type}
+                                value={formData[f.name] || ""}
+                                onChange={(e) => setFormData({ ...formData, [f.name]: e.target.value })}
+                                disabled={f.disabled}
+                                className="w-full border p-3 rounded"
+                                required={!!f.required}
+                            />
                         )}
+
                     </div>
                 ))}
             </div>
