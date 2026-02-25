@@ -573,7 +573,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
 
     const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };
     return (
-        <form onSubmit={handleSubmit} className="p-6 bg-white border rounded-lg space-y-4 max-w-4xl mx-auto">
+        <form onSubmit={handleSubmit} noValidate className="p-6 bg-white border rounded-lg space-y-4 max-w-4xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {fields.map(f => (
                     <div key={f.name}>
@@ -592,7 +592,7 @@ const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCan
                                 onChange={(e) => setFormData({ ...formData, [f.name]: e.target.value })}
                                 disabled={f.disabled}
                                 className="w-full border p-3 rounded"
-                                required={!!f.required}
+                                required={f.required ? true : undefined}
                             />
                         )}
 

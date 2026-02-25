@@ -223,8 +223,10 @@ export default function App() {
         if (dataToUpdate.telefono !== undefined) studentData.telefono = dataToUpdate.telefono || "";
         if (dataToUpdate.telefonourgencias !== undefined) studentData.telefono_urgencias = dataToUpdate.telefonourgencias || "";
         if (dataToUpdate.nacionalidad !== undefined) studentData.nacionalidad = dataToUpdate.nacionalidad || "";
-        if (dataToUpdate.fechanacimiento !== undefined) {
-            studentData.fecha_nacimiento = dataToUpdate.fechanacimiento || null;
+
+        // Only update birth date if it's provided, otherwise avoid sending it to prevent null constraint errors
+        if (dataToUpdate.fechanacimiento) {
+            studentData.fecha_nacimiento = dataToUpdate.fechanacimiento;
         }
 
         const { error } = await supabase.from('perfiles').update(studentData).eq('id', id);
@@ -236,6 +238,7 @@ export default function App() {
             return { success: true };
         }
     };
+
 
 
 
