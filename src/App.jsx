@@ -141,7 +141,7 @@ export default function App() {
                 setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
             }
 
-            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles(dni, apellido, nombre), instrumentos(nombre, plan)');
+            const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles!estudiante_id(dni, apellido, nombre), instrumentos(nombre, plan)');
             if (matric) {
                 setMatriculaciones(matric.map(m => ({
                     id: m.id,
@@ -156,14 +156,15 @@ export default function App() {
             }
 
 
-            const { data: nts } = await supabase.from('notas').select('*, matriculaciones(perfiles(dni)), materias(nombre)');
+            const { data: nts } = await supabase.from('notas').select('*, perfiles!estudiante_id(dni), materias(nombre)');
             if (nts) {
                 setNotas(nts.map(n => ({
-                    id: n.id, dni: n.matriculaciones?.perfiles?.dni, materia: n.materias?.nombre,
+                    id: n.id, dni: n.perfiles?.dni, materia: n.materias?.nombre,
                     nota: n.calificacion, condicion: n.condicion, fecha: n.fecha,
                     libro_folio: n.libro_folio, observaciones: n.observaciones, obs_optativa_ensamble: n.obs_detalle
                 })));
             }
+
         };
 
         loadData();
