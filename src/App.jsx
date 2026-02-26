@@ -142,12 +142,18 @@ export default function App() {
 
         await loadMatriculaciones();
 
-        const { data: nts } = await supabase.from('notas').select('*, perfiles!estudiante_id(dni), materias(nombre)');
+        const { data: nts } = await supabase.from('notas').select('*, materias(nombre), matriculaciones(perfiles(dni))');
         if (nts) {
             setNotas(nts.map(n => ({
-                id: n.id, dni: n.perfiles?.dni, materia: n.materias?.nombre,
-                nota: n.calificacion, condicion: n.condicion, fecha: n.fecha,
-                libro_folio: n.libro_folio, observaciones: n.observaciones, obs_optativa_ensamble: n.obs_detalle
+                id: n.id,
+                dni: n.matriculaciones?.perfiles?.dni,
+                materia: n.materias?.nombre,
+                nota: n.calificacion,
+                condicion: n.condicion,
+                fecha: n.fecha,
+                libro_folio: n.libro_folio,
+                observaciones: n.observaciones,
+                obs_optativa_ensamble: n.obs_detalle
             })));
         }
     }, [loadMatriculaciones]);
