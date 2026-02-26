@@ -111,6 +111,47 @@ export default function App() {
         }
     }, []);
 
+    const loadData = useCallback(async () => {
+        const { data: profiles } = await supabase.from('perfiles').select('*');
+        if (profiles) {
+            setStudents(profiles.map(p => ({
+                id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
+                email: p.email, direccion: p.direccion, ciudad: p.ciudad,
+                telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
+                nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
+            })).sort((a, b) =>
+                (a.apellidos || "").localeCompare(b.apellidos || "") ||
+                (a.nombres || "").localeCompare(b.nombres || "") ||
+                (a.dni || "").localeCompare(b.dni || "")
+            ));
+        }
+
+        const { data: inst } = await supabase.from('instrumentos').select('*');
+        if (inst) {
+            setInstrumentos(inst.map(i => ({
+                id: i.id,
+                instrumento: i.nombre,
+                plan: i.plan
+            })).sort((a, b) => a.instrumento.localeCompare(b.instrumento)));
+        }
+
+        const { data: mats } = await supabase.from('materias').select('*');
+        if (mats) {
+            setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
+        }
+
+        await loadMatriculaciones();
+
+        const { data: nts } = await supabase.from('notas').select('*, perfiles!estudiante_id(dni), materias(nombre)');
+        if (nts) {
+            setNotas(nts.map(n => ({
+                id: n.id, dni: n.perfiles?.dni, materia: n.materias?.nombre,
+                nota: n.calificacion, condicion: n.condicion, fecha: n.fecha,
+                libro_folio: n.libro_folio, observaciones: n.observaciones, obs_optativa_ensamble: n.obs_detalle
+            })));
+        }
+    }, [loadMatriculaciones]);
+
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
@@ -138,61 +179,6 @@ export default function App() {
     useEffect(() => {
         if (!userId) return;
 
-        const loadData = async () => {
-
-            const { data: profiles } = await supabase.from('perfiles').select('*');
-            if (profiles) {
-                setStudents(profiles.map(p => ({
-                    id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
-                    email: p.email, direccion: p.direccion, ciudad: p.ciudad,
-                    telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
-                    nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
-                })).sort((a, b) =>
-                    (a.apellidos || "").localeCompare(b.apellidos || "") ||
-                    (a.nombres || "").localeCompare(b.nombres || "") ||
-                    (a.dni || "").localeCompare(b.dni || "")
-                ));
-            }
-
-            const { data: inst } = await supabase.from('instrumentos').select('*');
-            if (inst) {
-                setInstrumentos(inst.map(i => ({
-                    id: i.id,
-                    instrumento: i.nombre,
-                    plan: i.plan
-                })).sort((a, b) => a.instrumento.localeCompare(b.instrumento)));
-            }
-
-            const { data: mats } = await supabase.from('materias').select('*');
-            if (mats) {
-                setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
-            }
-
-            await loadMatriculaciones();
-
-            const { data: nts } = await supabase.from('notas').select('*, perfiles!estudiante_id(dni), materias(nombre)');
-            if (nts) {
-                setNotas(nts.map(n => ({
-                    id: n.id, dni: n.perfiles?.dni, materia: n.materias?.nombre,
-                    nota: n.calificacion, condicion: n.condicion, fecha: n.fecha,
-                    libro_folio: n.libro_folio, observaciones: n.observaciones, obs_optativa_ensamble: n.obs_detalle
-                })));
-            }
-        };
-
-        const contextValue = {
-            students,
-            instrumentos,
-            materias,
-            matriculaciones,
-            notas,
-            addStudent,
-            updateStudent,
-            deleteStudent,
-            loadMatriculaciones // Agregamos esto al contexto o prop
-        };
-
-
         loadData();
 
         const channel = supabase.channel('db-changes')
@@ -203,9 +189,10 @@ export default function App() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, () => loadData())
             .subscribe();
 
-
-        return () => supabase.removeChannel(channel);
-    }, [userId]);
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [userId, loadData, loadMatriculaciones]);
 
     const showMessage = (text, isError) => setMessage({ text, isError });
     const navigateTo = (screen) => setAppState(screen);
