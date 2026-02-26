@@ -338,13 +338,16 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
 };
 
 const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
-    /* Implementación original simplificada */
     const [dniSearch, setDniSearch] = useState('');
     const [step, setStep] = useState(1);
     const [studentInfo, setStudentInfo] = useState(null);
     const [selectedPlan, setSelectedPlan] = useState('');
     const [selectedMateriaId, setSelectedMateriaId] = useState('');
     const [nota, setNota] = useState('');
+    const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+    const [condicion, setCondicion] = useState('Promoción');
+    const [libroFolio, setLibroFolio] = useState('');
+    const [observaciones, setObservaciones] = useState('');
 
     const handleDniSearch = (e) => {
         e.preventDefault();
@@ -359,14 +362,102 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
     const handleSave = async (e) => {
         e.preventDefault();
         const matricula = matriculaciones.find(m => m.dni === studentInfo.dni && m.plan === selectedPlan);
-        const { error } = await supabase.from('notas').insert([{ matriculacion_id: matricula.id, materia_id: selectedMateriaId, calificacion: nota, condicion: 'Promoción', fecha: new Date().toISOString().split('T')[0] }]);
-        if (!error) { showMessage("Nota guardada.", false); setStep(1); setDniSearch(''); }
+        const { error } = await supabase.from('notas').insert([{
+            matriculacion_id: matricula.id,
+            materia_id: selectedMateriaId,
+            calificacion: nota,
+            condicion: condicion,
+            fecha: fecha,
+            libro_folio: libroFolio,
+            observaciones: observaciones
+        }]);
+        if (!error) {
+            showMessage("Nota guardada.", false);
+            setStep(1);
+            setDniSearch('');
+            setNota('');
+            setLibroFolio('');
+            setObservaciones('');
+        } else {
+            showMessage(`Error al guardar: ${error.message}`, true);
+        }
     };
 
     return (
         <div className="max-w-2xl mx-auto">
-            {step === 1 && <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 border rounded-lg flex space-x-2"><input type="text" value={dniSearch} onChange={(e) => setDniSearch(e.target.value)} className="flex-grow p-3 border rounded" placeholder="DNI..." required /><button type="submit" className="bg-indigo-600 text-white px-5 rounded font-bold">Buscar</button></form>}
-            {step === 3 && <form onSubmit={handleSave} className="p-6 bg-white border rounded-lg space-y-4"><h3>Cargar para {studentInfo.nombres} ({selectedPlan})</h3><select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded">{materias.filter(m => m.plan === selectedPlan).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select><input type="text" value={nota} onChange={(e) => setNota(e.target.value)} className="w-full p-3 border rounded" placeholder="Nota..." required /><button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold">Guardar</button></form>}
+            {step === 1 && (
+                <form onSubmit={handleDniSearch} className="p-6 bg-indigo-50 border border-indigo-200 rounded-lg flex space-x-2">
+                    <input type="text" value={dniSearch} onChange={(e) => setDniSearch(e.target.value)} className="flex-grow p-3 border rounded-md shadow-sm" placeholder="Ingrese DNI del estudiante..." required />
+                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-md font-bold transition duration-200">Buscar</button>
+                </form>
+            )}
+
+            {step === 2 && studentInfo && (
+                <div className="p-6 bg-white border rounded-lg shadow-sm space-y-4">
+                    <h3 className="text-lg font-bold">Seleccione Plan para {studentInfo.nombres} {studentInfo.apellidos}</h3>
+                    <div className="grid grid-cols-1 gap-2">
+                        {[...new Set(matriculaciones.filter(m => m.dni === studentInfo.dni).map(m => m.plan))].map(plan => (
+                            <button key={plan} onClick={() => { setSelectedPlan(plan); setStep(3); }} className="p-4 bg-gray-50 border rounded-lg hover:bg-indigo-50 text-left font-medium transition italic">
+                                {plan}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {step === 3 && studentInfo && (
+                <form onSubmit={handleSave} className="p-8 bg-white border border-gray-200 rounded-xl shadow-lg space-y-5">
+                    <div className="border-b pb-3 mb-2">
+                        <h3 className="text-xl font-bold text-gray-800">{studentInfo.apellidos}, {studentInfo.nombres}</h3>
+                        <p className="text-sm text-indigo-600 font-medium">Plan: {selectedPlan}</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Materia</label>
+                            <select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50" required>
+                                <option value="">Seleccione Materia...</option>
+                                {materias.filter(m => m.plan === selectedPlan).map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.anio}° Año)</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Calificación</label>
+                            <input type="text" value={nota} onChange={(e) => setNota(e.target.value)} className="w-full p-3 border rounded-lg" placeholder="Ej: 8, 9, A..." required />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha</label>
+                            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full p-3 border rounded-lg" required />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Condición</label>
+                            <select value={condicion} onChange={(e) => setCondicion(e.target.value)} className="w-full p-3 border rounded-lg">
+                                <option value="Promoción">Promoción</option>
+                                <option value="Examen">Examen</option>
+                                <option value="Regular">Regular</option>
+                                <option value="Equivalencia">Equivalencia</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Libro / Folio</label>
+                            <input type="text" value={libroFolio} onChange={(e) => setLibroFolio(e.target.value)} className="w-full p-3 border rounded-lg" placeholder="Opcional..." />
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Observaciones</label>
+                            <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className="w-full p-3 border rounded-lg" rows="2" placeholder="Opcional..."></textarea>
+                        </div>
+                    </div>
+
+                    <div className="flex space-x-3 pt-2">
+                        <button type="button" onClick={() => setStep(1)} className="w-1/3 py-3 border rounded-lg font-bold hover:bg-gray-50 transition">Cancelar</button>
+                        <button type="submit" className="w-2/3 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-md transition transform active:scale-95">Guardar Nota</button>
+                    </div>
+                </form>
+            )}
         </div>
     );
 };
@@ -375,6 +466,7 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones }) 
     const [selectedMateriaId, setSelectedMateriaId] = useState('');
     const [planillaData, setPlanillaData] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [fechaGeneral, setFechaGeneral] = useState(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
         if (selectedMateriaId) {
@@ -397,7 +489,7 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones }) 
             materia_id: selectedMateriaId,
             calificacion: p.nota,
             condicion: p.condicion,
-            fecha: new Date().toISOString().split('T')[0]
+            fecha: fechaGeneral
         }));
 
         if (recordsToInsert.length === 0) { showMessage("No hay notas para cargar.", true); setLoading(false); return; }
@@ -410,31 +502,52 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones }) 
 
     return (
         <div className="space-y-4">
-            <select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded">
-                <option value="">Seleccione Materia...</option>
-                {materias.map(m => <option key={m.id} value={m.id}>({m.plan}) {m.nombre} - {m.anio}° Año</option>)}
-            </select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Materia / Plan</label>
+                    <select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded-lg bg-white shadow-sm">
+                        <option value="">Seleccione Materia...</option>
+                        {materias.map(m => <option key={m.id} value={m.id}>({m.plan}) {m.nombre} - {m.anio}° Año</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha General</label>
+                    <input type="date" value={fechaGeneral} onChange={(e) => setFechaGeneral(e.target.value)} className="w-full p-3 border rounded-lg bg-white shadow-sm" />
+                </div>
+            </div>
+
             {selectedMateriaId && planillaData.length > 0 && (
-                <div className="bg-white border rounded shadow-md overflow-hidden">
+                <div className="bg-white border rounded-xl shadow-lg overflow-hidden transition-all duration-300">
                     <table className="min-w-full text-sm">
-                        <thead className="bg-gray-100 italic"><tr><th className="p-2 text-left">Alumno</th><th className="p-2 text-center w-24">Nota</th><th className="p-2 text-left w-40">Condición</th></tr></thead>
-                        <tbody>
+                        <thead className="bg-gray-100 italic border-b text-gray-600">
+                            <tr>
+                                <th className="p-4 text-left font-bold">Alumno</th>
+                                <th className="p-4 text-center w-24 font-bold">Nota</th>
+                                <th className="p-4 text-left w-48 font-bold">Condición</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
                             {planillaData.map((p, idx) => (
-                                <tr key={p.id}>
-                                    <td className="p-2 border-b">{p.nombreCompleto}</td>
-                                    <td className="p-2 border-b text-center"><input type="text" value={p.nota} onChange={(e) => { const nd = [...planillaData]; nd[idx].nota = e.target.value; setPlanillaData(nd); }} className="w-16 border rounded p-1 text-center" /></td>
-                                    <td className="p-2 border-b">
-                                        <select value={p.condicion} onChange={(e) => { const nd = [...planillaData]; nd[idx].condicion = e.target.value; setPlanillaData(nd); }} className="w-full border rounded p-1">
-                                            <option value="Promoción">Promoción</option><option value="Examen">Examen</option><option value="Regular">Regular</option><option value="Equivalencia">Equivalencia</option>
+                                <tr key={p.id} className="hover:bg-indigo-50 transition">
+                                    <td className="p-4 font-medium">{p.nombreCompleto}</td>
+                                    <td className="p-4 text-center"><input type="text" value={p.nota} onChange={(e) => { const nd = [...planillaData]; nd[idx].nota = e.target.value; setPlanillaData(nd); }} className="w-16 border rounded-lg p-2 text-center shadow-inner" placeholder="-" /></td>
+                                    <td className="p-4">
+                                        <select value={p.condicion} onChange={(e) => { const nd = [...planillaData]; nd[idx].condicion = e.target.value; setPlanillaData(nd); }} className="w-full border rounded-lg p-2 bg-gray-50 text-sm">
+                                            <option value="Promoción">Promoción</option>
+                                            <option value="Examen">Examen</option>
+                                            <option value="Regular">Regular</option>
+                                            <option value="Equivalencia">Equivalencia</option>
                                         </select>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
-                    <button onClick={handleSavePlanilla} disabled={loading} className="w-full bg-indigo-600 text-white py-3 font-bold hover:bg-indigo-700 disabled:bg-gray-400">
-                        {loading ? 'Guardando...' : 'Guardar Planilla'}
-                    </button>
+                    <div className="p-4 bg-gray-50 border-t">
+                        <button onClick={handleSavePlanilla} disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md transition transform active:scale-95 disabled:bg-gray-400">
+                            {loading ? 'Procesando...' : `Guardar Notas para ${planillaData.filter(p => p.nota !== '').length} Alumnos`}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
