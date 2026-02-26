@@ -103,7 +103,11 @@ export default function App() {
                 cicloLectivo: m.ciclo_lectivo?.toString() || "",
                 instrumentoId: m.instrumento_id,
                 instrumento: m.instrumentos?.nombre || "No asignado"
-            })).sort((a, b) => (a.apellidos || "").localeCompare(b.apellidos || "") || (a.nombres || "").localeCompare(b.nombres || "")));
+            })).sort((a, b) =>
+                (a.apellidos || "").localeCompare(b.apellidos || "") ||
+                (a.nombres || "").localeCompare(b.nombres || "") ||
+                (a.dni || "").localeCompare(b.dni || "")
+            ));
         }
     }, []);
 
@@ -143,7 +147,11 @@ export default function App() {
                     email: p.email, direccion: p.direccion, ciudad: p.ciudad,
                     telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
                     nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
-                })).sort((a, b) => (a.apellidos || "").localeCompare(b.apellidos || "")));
+                })).sort((a, b) =>
+                    (a.apellidos || "").localeCompare(b.apellidos || "") ||
+                    (a.nombres || "").localeCompare(b.nombres || "") ||
+                    (a.dni || "").localeCompare(b.dni || "")
+                ));
             }
 
             const { data: inst } = await supabase.from('instrumentos').select('*');
