@@ -101,28 +101,65 @@ export default function App() {
         return () => subscription.unsubscribe();
     }, []);
 
+
     const handleSession = async (session) => {
         if (session?.user) {
-            setUserId(session.user.id);
-            // Buscar perfil en tabla pública para obtener Rol y Autorización
-            const { data: profile } = await supabase
+            const sid = session.user.id;
+            const semail = session.user.email;
+            setUserId(sid);
+
+            // 1. Intentar buscar por user_id
+            let { data: profile, error } = await supabase
                 .from('perfiles')
-                .select('rol, autorizado, nombre, apellido')
-                .eq('user_id', session.user.id)
-                .single();
+                .select('*')
+                .eq('user_id', sid)
+                .maybeSingle();
+
+            // 2. Si no se encuentra, intentar por email (para usuarios creados vía SQL o manual)
+            if (!profile && semail) {
+                const { data: profileByEmail } = await supabase
+                    .from('perfiles')
+                    .select('*')
+                    .eq('email', semail)
+                    .maybeSingle();
+
+                if (profileByEmail) {
+                    // AUTO-VINCULADO: Si encontramos por email, le ponemos el user_id para futuras sesiones
+                    const { data: updatedProfile } = await supabase
+                        .from('perfiles')
+                        .update({ user_id: sid })
+                        .eq('id', profileByEmail.id)
+                        .select()
+                        .single();
+                    profile = updatedProfile;
+                }
+            }
 
             if (profile) {
                 setUserRole(profile.rol);
                 setIsAuthorized(profile.autorizado);
                 setUserClaims({
-                    nombre: `${profile.nombre} ${profile.apellido}`,
+                    id: profile.id,
+                    nombre: profile.nombre ? `${profile.nombre} ${profile.apellido || ""}`.trim() : null,
                     rol: profile.rol,
-                    email: session.user.email
+                    email: semail
                 });
             } else {
+                // Caso extremo: No hay perfil en absoluto, crear uno básico pendiente
+                const { data: newProfile } = await supabase
+                    .from('perfiles')
+                    .insert([{
+                        user_id: sid,
+                        email: semail,
+                        rol: 'estudiante',
+                        autorizado: false
+                    }])
+                    .select()
+                    .single();
+
                 setUserRole('estudiante');
                 setIsAuthorized(false);
-                setUserClaims({ email: session.user.email });
+                setUserClaims({ email: semail, id: newProfile?.id });
             }
         } else {
             setUserId(null);
