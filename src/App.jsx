@@ -188,7 +188,9 @@ export default function App() {
     const loadData = useCallback(async (isSilent = false) => {
         try {
             if (!isSilent) setLoading(true);
+
             const { data: profiles, error: pError } = await supabase.from('perfiles').select('*');
+            console.log("DEBUG: Perfiles cargados:", profiles, "Error:", pError);
             if (pError) throw pError;
             if (profiles) {
                 setStudents(profiles.map(p => ({
