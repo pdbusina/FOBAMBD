@@ -137,12 +137,17 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
         let materiasFinal = materiasConNotas;
 
         // Lógica Excluyente Plan 530 (1er Año): EC vs DF
+        // Lógica Excluyente Plan 530 (1er Año): EC vs DF
         if (plan && plan.includes('530')) {
             const materiasPrimerAnio = materiasConNotas.filter(m => Number(m.anio) === 1);
+            console.log("DEBUG ANALITICO - Plan:", plan, "Materias 1er Año:", materiasPrimerAnio.map(m => m.materiaNombre));
 
-            const findMateria = (regex) => materiasPrimerAnio.find(m =>
-                regex.test(m.materiaNombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
-            );
+            const findMateria = (regex) => materiasPrimerAnio.find(m => {
+                const normalized = m.materiaNombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const isMatch = regex.test(normalized);
+                if (isMatch) console.log(`DEBUG ANALITICO - Matched: ${m.materiaNombre} with ${regex}`);
+                return isMatch;
+            });
 
             const materiaEC = findMateria(/expresion corporal/);
             const materiaDF = findMateria(/danzas folkloricas/);
@@ -150,11 +155,13 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
             const hasEC = materiaEC && materiaEC.notaData;
             const hasDF = materiaDF && materiaDF.notaData;
 
+            console.log("DEBUG ANALITICO - Status EC:", !!materiaEC, "Nota EC:", !!hasEC, "| Status DF:", !!materiaDF, "Nota DF:", !!hasDF);
+
             if (hasEC) {
-                // Si tiene nota en EC, filtramos DF
+                console.log("DEBUG ANALITICO - Eliminando DF porque EC tiene nota");
                 materiasFinal = materiasFinal.filter(m => m.id !== materiaDF?.id);
             } else if (hasDF) {
-                // Si tiene nota en DF, filtramos EC
+                console.log("DEBUG ANALITICO - Eliminando EC porque DF tiene nota");
                 materiasFinal = materiasFinal.filter(m => m.id !== materiaEC?.id);
             }
         }
