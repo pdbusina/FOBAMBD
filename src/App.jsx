@@ -195,29 +195,12 @@ export default function App() {
         loadData();
 
         const channel = supabase.channel('db-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles' }, (payload) => {
-                console.log("DB Change: perfiles", payload);
-                loadData(true);
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'instrumentos' }, (payload) => {
-                console.log("DB Change: instrumentos", payload);
-                loadData(true);
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'materias' }, (payload) => {
-                console.log("DB Change: materias", payload);
-                loadData(true);
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculaciones' }, (payload) => {
-                console.log("DB Change: matriculaciones", payload);
-                loadMatriculaciones();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, (payload) => {
-                console.log("DB Change: notas", payload);
-                loadData(true);
-            })
-            .subscribe((status) => {
-                console.log("Supabase Subscription Status:", status);
-            });
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles' }, () => loadData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'instrumentos' }, () => loadData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'materias' }, () => loadData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculaciones' }, () => loadMatriculaciones())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, () => loadData(true))
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);

@@ -329,7 +329,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
                 <TabButton id="ingresar_planilla" label="Ingresar Planilla" isActive={notasSubTab === 'ingresar_planilla'} onClick={setNotasSubTab} />
                 <TabButton id="ingresar_analitico" label="Ingresar Analítico" isActive={notasSubTab === 'ingresar_analitico'} onClick={setNotasSubTab} />
             </div>
-            {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} />}
+            {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} allNotas={notas} />}
             {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} />}
             {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notes={notas} />}
 
@@ -337,7 +337,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
     );
 };
 
-const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
+const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones, allNotas }) => {
     const [dniSearch, setDniSearch] = useState('');
     const [step, setStep] = useState(1);
     const [studentInfo, setStudentInfo] = useState(null);
@@ -348,6 +348,7 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
     const [condicion, setCondicion] = useState('Promoción');
     const [libroFolio, setLibroFolio] = useState('');
     const [observaciones, setObservaciones] = useState('');
+    const [existingNotaId, setExistingNotaId] = useState(null);
 
     const handleDniSearch = (e) => {
         e.preventDefault();
@@ -361,8 +362,45 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
 
     const handleSave = async (e) => {
         e.preventDefault();
+
+        // 1. Validar Calificación según condición
+        const valorNota = parseFloat(nota);
+        if (isNaN(valorNota) && !['A', 'SA', 'P', 'E'].includes(nota.toUpperCase())) {
+            return showMessage("La nota debe ser numérica o una sigla válida (A, SA, P, E).", true);
+        }
+
+        if (!isNaN(valorNota)) {
+            if (condicion === 'Promoción' && valorNota < 7) {
+                return showMessage("Para Promoción, la nota debe ser 7 o superior.", true);
+            }
+            if (['Examen Final', 'Equivalencia'].includes(condicion) && valorNota < 4) {
+                return showMessage("La nota mínima para aprobar es 4.", true);
+            }
+        }
+
         const matricula = matriculaciones.find(m => m.dni === studentInfo.dni && m.plan === selectedPlan);
-        const { error } = await supabase.from('notas').insert([{
+        const materia = materias.find(m => m.id === selectedMateriaId);
+
+        // 2. Verificar duplicado trans-plan (mismo nombre de materia para este DNI)
+        const duplicado = allNotas.find(n =>
+            n.dni === studentInfo.dni &&
+            n.materia?.trim().toLowerCase() === materia?.nombre?.trim().toLowerCase()
+        );
+
+        if (duplicado && !existingNotaId) {
+            if (window.confirm(`El estudiante ya tiene una nota cargada en '${materia.nombre}' (${duplicado.nota}). ¿Desea sobrescribirla?`)) {
+                setExistingNotaId(duplicado.id);
+                setNota(duplicado.nota || '');
+                setCondicion(duplicado.condicion || 'Promoción');
+                setLibroFolio(duplicado.libro_folio || '');
+                setObservaciones(duplicado.observaciones || '');
+                return;
+            } else {
+                return;
+            }
+        }
+
+        const notaData = {
             matriculacion_id: matricula.id,
             materia_id: selectedMateriaId,
             calificacion: nota,
@@ -370,14 +408,20 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
             fecha: fecha,
             libro_folio: libroFolio,
             observaciones: observaciones
-        }]);
+        };
+
+        const { error } = existingNotaId
+            ? await supabase.from('notas').update(notaData).eq('id', existingNotaId)
+            : await supabase.from('notas').insert([notaData]);
+
         if (!error) {
-            showMessage("Nota guardada.", false);
+            showMessage(existingNotaId ? "Nota actualizada." : "Nota guardada.", false);
             setStep(1);
             setDniSearch('');
             setNota('');
             setLibroFolio('');
             setObservaciones('');
+            setExistingNotaId(null);
         } else {
             showMessage(`Error al guardar: ${error.message}`, true);
         }
@@ -435,8 +479,7 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones }) => {
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Condición</label>
                             <select value={condicion} onChange={(e) => setCondicion(e.target.value)} className="w-full p-3 border rounded-lg">
                                 <option value="Promoción">Promoción</option>
-                                <option value="Examen">Examen</option>
-                                <option value="Regular">Regular</option>
+                                <option value="Examen Final">Examen Final</option>
                                 <option value="Equivalencia">Equivalencia</option>
                             </select>
                         </div>

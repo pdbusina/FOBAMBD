@@ -106,80 +106,78 @@ export const AnaliticoTab = ({
 
 export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel }) => {
     const processedData = useMemo(() => {
-        const materiasDelPlan = allMaterias.filter(m => m.plan === plan);
-        const notasDelEstudiante = allNotas.filter(n => n.dni === student.dni);
+        // 1. Materias base del plan seleccionado
+        const materiasBase = allMaterias.filter(m => m.plan === plan);
+        const notasEstudiante = allNotas.filter(n => n.dni === student.dni);
 
-        const materiasConNotas = materiasDelPlan.map(materia => {
-            // Normalizar nombres para búsqueda
-            const normalName = materia.materia?.trim().toLowerCase();
-            const esOptativaOEnsamble = normalName.includes('optativa') || normalName.includes('ensamble') || normalName.includes('espacio');
+        // 2. Procesar cada materia buscando su nota válida (Criterio de aprobación)
+        const materiasProcesadas = materiasBase.map(m => {
+            const normalPlanName = m.nombre?.trim().toLowerCase();
 
-            // Buscar nota (priorizar la mejor calificacion o la mas reciente)
-            const notaEncontrada = notasDelEstudiante.find(n => {
-                const materiaNota = n.materia?.trim().toLowerCase();
-                return materiaNota === normalName &&
-                    ['Promoción', 'Examen', 'Equivalencia'].includes(n.condicion);
+            // Buscar la mejor nota que cumpla con el criterio de aprobación
+            const notaValida = notasEstudiante.find(n => {
+                const normalNotaName = n.materia?.trim().toLowerCase();
+                if (normalNotaName !== normalPlanName) return false;
+
+                const calif = parseFloat(n.nota);
+                const condicionNormal = n.condicion?.trim();
+
+                // Criterios oficiales de aprobación
+                if (condicionNormal === 'Promoción') return calif >= 7;
+                if (['Examen Final', 'Examen', 'Equivalencia'].includes(condicionNormal)) return calif >= 4;
+
+                // Siglas aprobatorias (A = Aprobado, P = Promovido, E = Equivalencia)
+                if (['A', 'P', 'E'].includes(n.nota?.toUpperCase())) return true;
+
+                return false;
             });
 
-            // Si es optativa/ensamble, agregar el detalle al nombre si existe nota
-            let nombreMostrar = materia.materia;
-            if (esOptativaOEnsamble && notaEncontrada?.obs_optativa_ensamble) {
-                nombreMostrar += ` (${notaEncontrada.obs_optativa_ensamble})`;
+            // Detalle para Optativas/Ensambles/Espacios (cualquier año)
+            let nombreVisible = m.nombre;
+            const esMateriaEspecial = /ensamble|optativa|espacio/i.test(m.nombre);
+            if (esMateriaEspecial) {
+                const detalle = notaValida?.obs_optativa_ensamble || notaValida?.observaciones;
+                if (detalle) {
+                    nombreVisible += ` (${detalle})`;
+                }
             }
 
             return {
-                ...materia,
-                materiaNombre: nombreMostrar,
-                notaData: notaEncontrada || null
+                ...m,
+                materiaNombre: nombreVisible,
+                notaData: notaValida || null
             };
         });
 
-        let materiasFinal = materiasConNotas;
+        let resultadoFinal = materiasProcesadas;
 
-        // Lógica Excluyente Plan 530 (1er Año): EC vs DF
-        // Lógica Excluyente Plan 530 (1er Año): EC vs DF
+        // 3. Lógica específica Plan 530 (Mutuamente excluyentes en 1er año)
         if (plan && plan.includes('530')) {
-            const materiasPrimerAnio = materiasConNotas.filter(m => Number(m.anio) === 1);
-            console.log("DEBUG ANALITICO - Plan:", plan, "Materias 1er Año:", materiasPrimerAnio.map(m => m.materiaNombre));
+            const materias1Anio = materiasProcesadas.filter(m => Number(m.anio) === 1);
 
-            const findMateria = (regex) => materiasPrimerAnio.find(m => {
-                const normalized = m.materiaNombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                const isMatch = regex.test(normalized);
-                if (isMatch) console.log(`DEBUG ANALITICO - Matched: ${m.materiaNombre} with ${regex}`);
-                return isMatch;
-            });
+            const findMat = (regex) => materias1Anio.find(m =>
+                regex.test(m.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+            );
 
-            const materiaEC = findMateria(/expresion corporal/);
-            const materiaDF = findMateria(/danzas folkloricas/);
+            const matEC = findMat(/expresion corporal/);
+            const matDF = findMat(/danzas folkloricas/);
 
-            const hasEC = materiaEC && materiaEC.notaData;
-            const hasDF = materiaDF && materiaDF.notaData;
-
-            console.log("DEBUG ANALITICO - Status EC:", !!materiaEC, "Nota EC:", !!hasEC, "| Status DF:", !!materiaDF, "Nota DF:", !!hasDF);
-
-            if (hasEC) {
-                console.log("DEBUG ANALITICO - Eliminando DF porque EC tiene nota");
-                materiasFinal = materiasFinal.filter(m => m.id !== materiaDF?.id);
-            } else if (hasDF) {
-                console.log("DEBUG ANALITICO - Eliminando EC porque DF tiene nota");
-                materiasFinal = materiasFinal.filter(m => m.id !== materiaEC?.id);
+            if (matEC?.notaData) {
+                // Si aprobó EC, ocultamos DF
+                resultadoFinal = resultadoFinal.filter(m => m.id !== matDF?.id);
+            } else if (matDF?.notaData) {
+                // Si aprobó DF, ocultamos EC
+                resultadoFinal = resultadoFinal.filter(m => m.id !== matEC?.id);
             }
         }
 
-        // Agrupar por año
-        const grouped = materiasFinal.reduce((acc, m) => {
+        // 4. Agrupar por año
+        return resultadoFinal.reduce((acc, m) => {
             const anio = m.anio || 'N/A';
             if (!acc[anio]) acc[anio] = [];
             acc[anio].push(m);
             return acc;
         }, {});
-
-        // Ordenar materias dentro de cada año
-        Object.keys(grouped).forEach(anio => {
-            grouped[anio].sort((a, b) => a.materiaNombre.localeCompare(b.materiaNombre));
-        });
-
-        return grouped;
     }, [student.dni, plan, allNotas, allMaterias]);
 
     const anios = Object.keys(processedData).sort((a, b) => a - b);
