@@ -134,8 +134,36 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
             };
         });
 
+        let materiasFinal = materiasConNotas;
+
+        // Lógica Excluyente Plan 530 (1er Año): EC vs DF
+        if (plan === '530') {
+            const hasEC = materiasConNotas.some(m =>
+                (Number(m.anio) === 1) &&
+                m.materiaNombre.toLowerCase().includes('expresión corporal') &&
+                m.notaData
+            );
+            const hasDF = materiasConNotas.some(m =>
+                (Number(m.anio) === 1) &&
+                m.materiaNombre.toLowerCase().includes('danzas folklóricas') &&
+                m.notaData
+            );
+
+            if (hasEC) {
+                // Si hizo Expresión Corporal, ocultamos Danzas Folklóricas
+                materiasFinal = materiasFinal.filter(m =>
+                    !(Number(m.anio) === 1 && m.materiaNombre.toLowerCase().includes('danzas folklóricas'))
+                );
+            } else if (hasDF) {
+                // Si hizo Danzas Folklóricas, ocultamos Expresión Corporal
+                materiasFinal = materiasFinal.filter(m =>
+                    !(Number(m.anio) === 1 && m.materiaNombre.toLowerCase().includes('expresión corporal'))
+                );
+            }
+        }
+
         // Agrupar por año
-        const grouped = materiasConNotas.reduce((acc, m) => {
+        const grouped = materiasFinal.reduce((acc, m) => {
             const anio = m.anio || 'N/A';
             if (!acc[anio]) acc[anio] = [];
             acc[anio].push(m);

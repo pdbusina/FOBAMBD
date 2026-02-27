@@ -106,7 +106,8 @@ export default function App() {
         }
     }, []);
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (isSilent = false) => {
+        if (!isSilent) setLoading(true);
         const { data: profiles } = await supabase.from('perfiles').select('*');
         if (profiles) {
             setStudents(profiles.map(p => ({
@@ -151,6 +152,7 @@ export default function App() {
                 obs_optativa_ensamble: n.obs_detalle
             })));
         }
+        if (!isSilent) setLoading(false);
     }, [loadMatriculaciones]);
 
     useEffect(() => {
@@ -183,11 +185,11 @@ export default function App() {
         loadData();
 
         const channel = supabase.channel('db-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles' }, () => loadData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'instrumentos' }, () => loadData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'materias' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles' }, () => loadData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'instrumentos' }, () => loadData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'materias' }, () => loadData(true))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculaciones' }, () => loadMatriculaciones())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, () => loadData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'notas' }, () => loadData(true))
             .subscribe();
 
         return () => {
