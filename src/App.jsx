@@ -289,8 +289,12 @@ export default function App() {
         if (error) showMessage(error.message, true); else showMessage("Materia eliminada.", false);
     };
 
+
+    console.log("App Rendering - loading:", loading, "userId:", userId, "appState:", appState);
+
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-indigo-600">
+            <h1 className="text-xl font-bold mb-4">DEPURACIÓN: CARGANDO...</h1>
             <IconLoading className="w-12 h-12 animate-spin mb-4" />
             <p className="font-medium">Cargando Sistema Escolástico...</p>
         </div>

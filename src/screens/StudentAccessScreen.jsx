@@ -266,4 +266,5 @@ export const CertificateDisplay = ({ student, plan, onCancel }) => {
         </div>
     );
 };
+
 export default StudentAccessScreen;
