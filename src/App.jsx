@@ -44,17 +44,12 @@ const printStyles = `
     }
 
     body.printing-analitico {
-      @page {
-        size: A4 portrait;
-        margin: 20mm 15mm;
-      }
+       /* Estilos específicos para analítico si los hubiera */
     }
-    
-    body.printing-certificado {
-      @page {
-        size: A5 portrait;
-        margin: 15mm; 
-      }
+
+    @page {
+      size: A4 portrait;
+      margin: 15mm;
     }
     
     table { width: 100%; border-collapse: collapse; }
@@ -142,7 +137,7 @@ export default function App() {
 
         await loadMatriculaciones();
 
-        const { data: nts } = await supabase.from('notas').select('*, materias(nombre), matriculaciones(perfiles(dni))');
+        const { data: nts } = await supabase.from('notas').select('*, materias(nombre), matriculaciones(perfiles!estudiante_id(dni))');
         if (nts) {
             setNotas(nts.map(n => ({
                 id: n.id,
@@ -283,6 +278,7 @@ export default function App() {
             {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
 
             <div id="certificate-print-area" className="print-area"></div>
+            <div id="analitico-print-area" className="print-area"></div>
 
             <div className="no-print">
                 {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}

@@ -115,10 +115,11 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
             const esOptativaOEnsamble = normalName.includes('optativa') || normalName.includes('ensamble') || normalName.includes('espacio');
 
             // Buscar nota (priorizar la mejor calificacion o la mas reciente)
-            const notaEncontrada = notasDelEstudiante.find(n =>
-                n.materia?.trim().toLowerCase() === normalName &&
-                ['Promoción', 'Examen', 'Equivalencia'].includes(n.condicion)
-            );
+            const notaEncontrada = notasDelEstudiante.find(n => {
+                const materiaNota = n.materia?.trim().toLowerCase();
+                return materiaNota === normalName &&
+                    ['Promoción', 'Examen', 'Equivalencia'].includes(n.condicion);
+            });
 
             // Si es optativa/ensamble, agregar el detalle al nombre si existe nota
             let nombreMostrar = materia.materia;
@@ -254,7 +255,6 @@ export const StudentAnaliticoScreen = ({
 }) => {
     return (
         <div className="flex flex-col items-center min-h-screen p-4 md:p-8 bg-gray-50">
-            <div id="analitico-print-area" className="print-area"></div>
             <header className="text-center mb-6 no-print">
                 <h1 className="text-3xl font-extrabold text-indigo-900 tracking-tight">Reporte Analítico</h1>
                 <p className="text-gray-500">Formación Básica en Música</p>
