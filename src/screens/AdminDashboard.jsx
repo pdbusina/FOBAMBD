@@ -19,7 +19,7 @@ export const AdminDashboardScreen = ({
     userClaims, navigateTo, activeTab, handleTabChange, showMessage,
     userId, students, instrumentos, addStudent, updateStudent, deleteStudent,
     matriculaciones, materias, notas, deleteMateria, notasSubTab, setNotasSubTab,
-    loadMatriculaciones
+    loadMatriculaciones, loadData
 }) => {
 
 
@@ -61,8 +61,8 @@ export const AdminDashboardScreen = ({
                     {activeTab === 'matricular' && <MatriculacionTab showMessage={showMessage} instrumentos={instrumentos} matriculaciones={matriculaciones} loadMatriculaciones={loadMatriculaciones} />}
 
                     {activeTab === 'listado' && <ListadoEstudiantesTab students={students} deleteStudent={deleteStudent} />}
-                    {activeTab === 'notas' && <NotasTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab} />}
-                    {activeTab === 'analitico' && <AnaliticoTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} />}
+                    {activeTab === 'notas' && <NotasTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab} loadData={loadData} />}
+                    {activeTab === 'analitico' && <AnaliticoTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} loadData={loadData} />}
                     {activeTab === 'certificado' && <CertificadoTab showMessage={showMessage} students={students} matriculaciones={matriculaciones} />}
                     {activeTab === 'instrumentos' && <InstrumentosTab showMessage={showMessage} instrumentos={instrumentos} />}
                     {activeTab === 'materias' && <MateriasTab showMessage={showMessage} materias={materias} deleteMateria={deleteMateria} />}
@@ -320,7 +320,7 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones, l
     );
 };
 
-export const NotasTab = ({ showMessage, materias, students, matriculaciones, notas, notasSubTab, setNotasSubTab }) => {
+export const NotasTab = ({ showMessage, materias, students, matriculaciones, notas, notasSubTab, setNotasSubTab, loadData }) => {
     return (
         <div id="gestion_notas">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Gestión de Notas</h2>
@@ -329,7 +329,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
                 <TabButton id="ingresar_planilla" label="Ingresar Planilla" isActive={notasSubTab === 'ingresar_planilla'} onClick={setNotasSubTab} />
                 <TabButton id="ingresar_analitico" label="Ingresar Analítico" isActive={notasSubTab === 'ingresar_analitico'} onClick={setNotasSubTab} />
             </div>
-            {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} allNotas={notas} />}
+            {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} allNotas={notas} loadData={loadData} />}
             {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} />}
             {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notes={notas} />}
 
@@ -337,7 +337,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
     );
 };
 
-const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones, allNotas }) => {
+const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones, allNotas, loadData }) => {
     const [dniSearch, setDniSearch] = useState('');
     const [step, setStep] = useState(1);
     const [studentInfo, setStudentInfo] = useState(null);
@@ -416,6 +416,7 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones, allNot
 
         if (!error) {
             showMessage(existingNotaId ? "Nota actualizada." : "Nota guardada.", false);
+            if (loadData) loadData(true); // Refresco silencioso
             setStep(1);
             setDniSearch('');
             setNota('');

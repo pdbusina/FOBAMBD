@@ -6,7 +6,7 @@ import { IconLoading, IconPrint } from '../components/Icons';
  * Pestaña 5: Analítico
  */
 export const AnaliticoTab = ({
-    showMessage, students, matriculaciones, materias, notas
+    showMessage, students, matriculaciones, materias, notas, loadData
 }) => {
     const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Mostrar Reporte
     const [dniSearch, setDniSearch] = useState('');
@@ -23,6 +23,9 @@ export const AnaliticoTab = ({
             showMessage(`Estudiante con DNI ${dniSearch} no encontrado.`, true);
             return;
         }
+
+        // Refrescar datos para asegurar que las notas son las últimas
+        if (loadData) loadData(true);
 
         setStudentInfo(student);
         const planes = [...new Set(matriculaciones.filter(m => m.dni === dniSearch).map(m => m.plan))];

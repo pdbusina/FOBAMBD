@@ -316,6 +316,7 @@ export default function App() {
                     matriculaciones={matriculaciones} materias={materias} notas={notas}
                     deleteMateria={deleteMateria} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab}
                     loadMatriculaciones={loadMatriculaciones}
+                    loadData={loadData}
                 />
 
             )}
