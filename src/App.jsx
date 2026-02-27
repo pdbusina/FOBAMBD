@@ -310,7 +310,8 @@ export default function App() {
                 <div className="max-w-md w-full bg-white p-10 rounded-2xl shadow-xl text-center border-t-4 border-amber-500">
                     <div className="text-amber-500 mb-4 flex justify-center text-6xl">⚠️</div>
                     <h1 className="text-2xl font-bold text-gray-800 mb-2">Acceso Pendiente</h1>
-                    <p className="text-gray-600 mb-6">Tu cuenta ({userClaims?.nombre}) ha sido creada con éxito, pero aún requiere la autorización de un directivo para acceder al sistema.</p>
+
+                    <p className="text-gray-600 mb-6">Tu cuenta ({userClaims?.nombre || userClaims?.email}) ha sido creada con éxito, pero aún requiere la autorización de un directivo para acceder al sistema.</p>
                     <button onClick={() => supabase.auth.signOut()} className="text-indigo-600 font-bold hover:underline">Cerrar Sesión</button>
                 </div>
             </div>
