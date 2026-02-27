@@ -131,6 +131,26 @@ const AdminLoginScreen = ({ navigateTo, showMessage }) => {
                     >
                         {isRegistering ? '¿Ya tenés cuenta? Ingresá acá' : '¿No tenés cuenta? Registrate acá'}
                     </button>
+
+                    <div className="relative my-6">
+                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-300"></span></div>
+                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-gray-500">O continuar con</span></div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            const { error } = await supabase.auth.signInWithOAuth({
+                                provider: 'google',
+                                options: { redirectTo: window.location.origin }
+                            });
+                            if (error) showMessage(`Error: ${error.message}`, true);
+                        }}
+                        className="w-full flex items-center justify-center border-2 border-gray-300 py-3 px-4 rounded-lg font-bold hover:bg-gray-50 transition"
+                    >
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 mr-3" alt="Google" />
+                        Ingresar con Google
+                    </button>
                 </form>
 
                 <button
