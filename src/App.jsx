@@ -134,6 +134,12 @@ export default function App() {
         setLoading(false);
     };
 
+    const loadMatriculaciones = useCallback(async () => {
+        const { data, error } = await supabase.from('matriculaciones').select('*');
+        if (error) throw error;
+        setMatriculaciones(data);
+    }, []);
+
     const loadData = useCallback(async (isSilent = false) => {
         try {
             if (!isSilent) setLoading(true);
@@ -290,11 +296,9 @@ export default function App() {
     };
 
 
-    console.log("App Rendering - loading:", loading, "userId:", userId, "appState:", appState);
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-indigo-600">
-            <h1 className="text-xl font-bold mb-4">DEPURACIÓN: CARGANDO...</h1>
             <IconLoading className="w-12 h-12 animate-spin mb-4" />
             <p className="font-medium">Cargando Sistema Escolástico...</p>
         </div>
