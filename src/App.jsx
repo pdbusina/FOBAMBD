@@ -85,40 +85,54 @@ export default function App() {
     const [notasSubTab, setNotasSubTab] = useState('ingresar_nota');
     const [message, setMessage] = useState({ text: "", isError: false });
     const [userRole, setUserRole] = useState(null);
+    const [userClaims, setUserClaims] = useState(null); // Estado faltante
     const [isAuthorized, setIsAuthorized] = useState(false);
 
     useEffect(() => {
-        // Escuchar cambios de autenticación
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (session?.user) {
-                setUserId(session.user.id);
-                // Buscar perfil y rol
-                const { data: profile } = await supabase
-                    .from('perfiles')
-                    .select('rol, autorizado, nombre, apellido')
-                    .eq('user_id', session.user.id)
-                    .single();
+        // Cargar sesión inicial
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            handleSession(session);
+        });
 
-                if (profile) {
-                    setUserRole(profile.rol);
-                    setIsAuthorized(profile.autorizado);
-                    setUserClaims({ nombre: `${profile.nombre} ${profile.apellido}`, rol: profile.rol });
-                } else {
-                    // Si no hay perfil vinculado aún (ej: primer login)
-                    setUserRole('estudiante');
-                    setIsAuthorized(false);
-                }
-            } else {
-                setUserId(null);
-                setUserRole(null);
-                setIsAuthorized(false);
-                setUserClaims(null);
-                setAppState('landing');
-            }
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            handleSession(session);
         });
 
         return () => subscription.unsubscribe();
     }, []);
+
+    const handleSession = async (session) => {
+        if (session?.user) {
+            setUserId(session.user.id);
+            // Buscar perfil en tabla pública para obtener Rol y Autorización
+            const { data: profile } = await supabase
+                .from('perfiles')
+                .select('rol, autorizado, nombre, apellido')
+                .eq('user_id', session.user.id)
+                .single();
+
+            if (profile) {
+                setUserRole(profile.rol);
+                setIsAuthorized(profile.autorizado);
+                setUserClaims({
+                    nombre: `${profile.nombre} ${profile.apellido}`,
+                    rol: profile.rol,
+                    email: session.user.email
+                });
+            } else {
+                setUserRole('estudiante');
+                setIsAuthorized(false);
+                setUserClaims({ email: session.user.email });
+            }
+        } else {
+            setUserId(null);
+            setUserRole(null);
+            setIsAuthorized(false);
+            setUserClaims(null);
+            setAppState('landing');
+        }
+        setLoading(false);
+    };
 
     const loadData = useCallback(async (isSilent = false) => {
         try {
@@ -180,28 +194,6 @@ export default function App() {
         }
     }, [loadMatriculaciones]);
 
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                setUserId(session.user.id);
-                setUserClaims(session.user.user_metadata);
-            }
-            setLoading(false);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                setUserId(session.user.id);
-                setUserClaims(session.user.user_metadata);
-            } else if (event === 'SIGNED_OUT') {
-                setUserId(null);
-                setUserClaims(null);
-                setAppState('landing');
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
 
 
     useEffect(() => {
