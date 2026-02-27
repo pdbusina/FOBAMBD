@@ -137,28 +137,25 @@ export const AnaliticoReport = ({ student, plan, allNotas, allMaterias, onCancel
         let materiasFinal = materiasConNotas;
 
         // Lógica Excluyente Plan 530 (1er Año): EC vs DF
-        if (plan === '530') {
-            const hasEC = materiasConNotas.some(m =>
-                (Number(m.anio) === 1) &&
-                m.materiaNombre.toLowerCase().includes('expresión corporal') &&
-                m.notaData
-            );
-            const hasDF = materiasConNotas.some(m =>
-                (Number(m.anio) === 1) &&
-                m.materiaNombre.toLowerCase().includes('danzas folklóricas') &&
-                m.notaData
+        if (plan && plan.includes('530')) {
+            const materiasPrimerAnio = materiasConNotas.filter(m => Number(m.anio) === 1);
+
+            const findMateria = (regex) => materiasPrimerAnio.find(m =>
+                regex.test(m.materiaNombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
             );
 
+            const materiaEC = findMateria(/expresion corporal/);
+            const materiaDF = findMateria(/danzas folkloricas/);
+
+            const hasEC = materiaEC && materiaEC.notaData;
+            const hasDF = materiaDF && materiaDF.notaData;
+
             if (hasEC) {
-                // Si hizo Expresión Corporal, ocultamos Danzas Folklóricas
-                materiasFinal = materiasFinal.filter(m =>
-                    !(Number(m.anio) === 1 && m.materiaNombre.toLowerCase().includes('danzas folklóricas'))
-                );
+                // Si tiene nota en EC, filtramos DF
+                materiasFinal = materiasFinal.filter(m => m.id !== materiaDF?.id);
             } else if (hasDF) {
-                // Si hizo Danzas Folklóricas, ocultamos Expresión Corporal
-                materiasFinal = materiasFinal.filter(m =>
-                    !(Number(m.anio) === 1 && m.materiaNombre.toLowerCase().includes('expresión corporal'))
-                );
+                // Si tiene nota en DF, filtramos EC
+                materiasFinal = materiasFinal.filter(m => m.id !== materiaEC?.id);
             }
         }
 

@@ -107,52 +107,62 @@ export default function App() {
     }, []);
 
     const loadData = useCallback(async (isSilent = false) => {
-        if (!isSilent) setLoading(true);
-        const { data: profiles } = await supabase.from('perfiles').select('*');
-        if (profiles) {
-            setStudents(profiles.map(p => ({
-                id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
-                email: p.email, direccion: p.direccion, ciudad: p.ciudad,
-                telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
-                nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
-            })).sort((a, b) =>
-                (a.apellidos || "").localeCompare(b.apellidos || "") ||
-                (a.nombres || "").localeCompare(b.nombres || "") ||
-                (a.dni || "").localeCompare(b.dni || "")
-            ));
-        }
+        try {
+            if (!isSilent) setLoading(true);
+            const { data: profiles, error: pError } = await supabase.from('perfiles').select('*');
+            if (pError) throw pError;
+            if (profiles) {
+                setStudents(profiles.map(p => ({
+                    id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
+                    email: p.email, direccion: p.direccion, ciudad: p.ciudad,
+                    telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
+                    nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
+                })).sort((a, b) =>
+                    (a.apellidos || "").localeCompare(b.apellidos || "") ||
+                    (a.nombres || "").localeCompare(b.nombres || "") ||
+                    (a.dni || "").localeCompare(b.dni || "")
+                ));
+            }
 
-        const { data: inst } = await supabase.from('instrumentos').select('*');
-        if (inst) {
-            setInstrumentos(inst.map(i => ({
-                id: i.id,
-                instrumento: i.nombre,
-                plan: i.plan
-            })).sort((a, b) => a.instrumento.localeCompare(b.instrumento)));
-        }
+            const { data: inst, error: iError } = await supabase.from('instrumentos').select('*');
+            if (iError) throw iError;
+            if (inst) {
+                setInstrumentos(inst.map(i => ({
+                    id: i.id,
+                    instrumento: i.nombre,
+                    plan: i.plan
+                })).sort((a, b) => a.instrumento.localeCompare(b.instrumento)));
+            }
 
-        const { data: mats } = await supabase.from('materias').select('*');
-        if (mats) {
-            setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
-        }
+            const { data: mats, error: mError } = await supabase.from('materias').select('*');
+            if (mError) throw mError;
+            if (mats) {
+                setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
+            }
 
-        await loadMatriculaciones();
+            await loadMatriculaciones();
 
-        const { data: nts } = await supabase.from('notas').select('*, materias(nombre), matriculaciones(perfiles!estudiante_id(dni))');
-        if (nts) {
-            setNotas(nts.map(n => ({
-                id: n.id,
-                dni: n.matriculaciones?.perfiles?.dni,
-                materia: n.materias?.nombre,
-                nota: n.calificacion,
-                condicion: n.condicion,
-                fecha: n.fecha,
-                libro_folio: n.libro_folio,
-                observaciones: n.observaciones,
-                obs_optativa_ensamble: n.obs_detalle
-            })));
+            const { data: nts, error: nError } = await supabase.from('notas').select('*, materias(nombre), matriculaciones(perfiles!estudiante_id(dni))');
+            if (nError) throw nError;
+            if (nts) {
+                setNotas(nts.map(n => ({
+                    id: n.id,
+                    dni: n.matriculaciones?.perfiles?.dni,
+                    materia: n.materias?.nombre,
+                    nota: n.calificacion,
+                    condicion: n.condicion,
+                    fecha: n.fecha,
+                    libro_folio: n.libro_folio,
+                    observaciones: n.observaciones,
+                    obs_optativa_ensamble: n.obs_detalle
+                })));
+            }
+        } catch (err) {
+            console.error("Error loading data:", err);
+            if (!isSilent) showMessage("Error al cargar datos. Verifique su conexión.", true);
+        } finally {
+            if (!isSilent) setLoading(false);
         }
-        if (!isSilent) setLoading(false);
     }, [loadMatriculaciones]);
 
     useEffect(() => {
@@ -164,14 +174,14 @@ export default function App() {
             setLoading(false);
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (session) {
                 setUserId(session.user.id);
                 setUserClaims(session.user.user_metadata);
-            } else {
+            } else if (event === 'SIGNED_OUT') {
                 setUserId(null);
                 setUserClaims(null);
-                setAppState('landing'); // Volver al inicio al cerrar sesión
+                setAppState('landing');
             }
         });
 
