@@ -84,26 +84,40 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('inscribir');
     const [notasSubTab, setNotasSubTab] = useState('ingresar_nota');
     const [message, setMessage] = useState({ text: "", isError: false });
-    const [userClaims, setUserClaims] = useState(null);
+    const [userRole, setUserRole] = useState(null);
+    const [isAuthorized, setIsAuthorized] = useState(false);
 
-    const loadMatriculaciones = useCallback(async () => {
-        const { data: matric } = await supabase.from('matriculaciones').select('*, perfiles!estudiante_id(dni, apellido, nombre), instrumentos(nombre, plan)');
-        if (matric) {
-            setMatriculaciones(matric.map(m => ({
-                id: m.id,
-                dni: m.perfiles?.dni,
-                apellidos: m.perfiles?.apellido,
-                nombres: m.perfiles?.nombre,
-                plan: m.plan || m.instrumentos?.plan || "Sin Plan",
-                cicloLectivo: m.ciclo_lectivo?.toString() || "",
-                instrumentoId: m.instrumento_id,
-                instrumento: m.instrumentos?.nombre || "No asignado"
-            })).sort((a, b) =>
-                (a.apellidos || "").localeCompare(b.apellidos || "") ||
-                (a.nombres || "").localeCompare(b.nombres || "") ||
-                (a.dni || "").localeCompare(b.dni || "")
-            ));
-        }
+    useEffect(() => {
+        // Escuchar cambios de autenticación
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session?.user) {
+                setUserId(session.user.id);
+                // Buscar perfil y rol
+                const { data: profile } = await supabase
+                    .from('perfiles')
+                    .select('rol, autorizado, nombre, apellido')
+                    .eq('user_id', session.user.id)
+                    .single();
+
+                if (profile) {
+                    setUserRole(profile.rol);
+                    setIsAuthorized(profile.autorizado);
+                    setUserClaims({ nombre: `${profile.nombre} ${profile.apellido}`, rol: profile.rol });
+                } else {
+                    // Si no hay perfil vinculado aún (ej: primer login)
+                    setUserRole('estudiante');
+                    setIsAuthorized(false);
+                }
+            } else {
+                setUserId(null);
+                setUserRole(null);
+                setIsAuthorized(false);
+                setUserClaims(null);
+                setAppState('landing');
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const loadData = useCallback(async (isSilent = false) => {
@@ -116,7 +130,8 @@ export default function App() {
                     id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
                     email: p.email, direccion: p.direccion, ciudad: p.ciudad,
                     telefono: p.telefono, telefonourgencias: p.telefono_urgencias,
-                    nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento
+                    nacionalidad: p.nacionalidad, genero: p.genero, fechanacimiento: p.fecha_nacimiento,
+                    rol: p.rol, autorizado: p.autorizado
                 })).sort((a, b) =>
                     (a.apellidos || "").localeCompare(b.apellidos || "") ||
                     (a.nombres || "").localeCompare(b.nombres || "") ||
@@ -282,52 +297,71 @@ export default function App() {
         if (error) showMessage(error.message, true); else showMessage("Materia eliminada.", false);
     };
 
-    if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-100"><IconLoading /><span className="ml-3">Cargando...</span></div>;
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-indigo-600">
+            <IconLoading className="w-12 h-12 animate-spin mb-4" />
+            <p className="font-medium">Cargando Sistema Escolástico...</p>
+        </div>
+    );
+
+    if (userId && !isAuthorized) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-100 p-8">
+                <div className="max-w-md w-full bg-white p-10 rounded-2xl shadow-xl text-center border-t-4 border-amber-500">
+                    <div className="text-amber-500 mb-4 flex justify-center text-6xl">⚠️</div>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Acceso Pendiente</h1>
+                    <p className="text-gray-600 mb-6">Tu cuenta ({userClaims?.nombre}) ha sido creada con éxito, pero aún requiere la autorización de un directivo para acceder al sistema.</p>
+                    <button onClick={() => supabase.auth.signOut()} className="text-indigo-600 font-bold hover:underline">Cerrar Sesión</button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">
             <style>{printStyles}</style>
-            {message.text && <Message text={message.text} isError={message.isError} onClose={() => showMessage("", false)} />}
+            {message.text && <Message text={message.text} isError={message.isError} onClose={() => setMessage({ text: "", isError: false })} />}
 
             <div id="certificate-print-area" className="print-area"></div>
             <div id="analitico-print-area" className="print-area"></div>
 
             <div className="no-print">
-                {appState === 'landing' && <LandingScreen navigateTo={navigateTo} />}
-                {appState === 'student_access' &&
-                    <StudentAccessScreen
-                        navigateTo={navigateTo}
-                        db={supabase}
-                        appId="supabase"
-                        showMessage={showMessage}
-                        students={students}
-                        matriculaciones={matriculaciones}
-                    />
-                }
-                {appState === 'admin_login' && <AdminLoginScreen navigateTo={navigateTo} showMessage={showMessage} />}
+                {appState === 'landing' && <LandingScreen navigateTo={setAppState} />}
+                {appState === 'admin_login' && <AdminLoginScreen navigateTo={setAppState} showMessage={showMessage} />}
+                {appState === 'student_access' && <StudentAccessScreen navigateTo={setAppState} db={supabase} appId={userId} showMessage={showMessage} students={students} matriculaciones={matriculaciones} />}
             </div>
 
             {appState === 'admin_dashboard' && (
                 <AdminDashboardScreen
-                    userClaims={userClaims} navigateTo={navigateTo} activeTab={activeTab}
-                    handleTabChange={handleTabChange} showMessage={showMessage}
-                    userId={userId} students={students} instrumentos={instrumentos}
-                    addStudent={addStudent} updateStudent={updateStudent} deleteStudent={deleteStudent}
-                    matriculaciones={matriculaciones} materias={materias} notas={notas}
-                    deleteMateria={deleteMateria} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab}
+                    userClaims={userClaims}
+                    userId={userId}
+                    userRole={userRole}
+                    activeTab={activeTab}
+                    handleTabChange={setActiveTab}
+                    navigateTo={setAppState}
+                    showMessage={showMessage}
+                    students={students}
+                    instrumentos={instrumentos}
+                    matriculaciones={matriculaciones}
+                    materias={materias}
+                    notas={notas}
+                    notasSubTab={notasSubTab}
+                    setNotasSubTab={setNotasSubTab}
                     loadMatriculaciones={loadMatriculaciones}
                     loadData={loadData}
                 />
-
             )}
 
-            {appState === 'student_analitico' &&
+            {appState === 'student_analitico' && (
                 <StudentAnaliticoScreen
-                    navigateTo={navigateTo} showMessage={showMessage}
-                    students={students} matriculaciones={matriculaciones}
-                    materias={materias} notas={notas}
+                    navigateTo={setAppState}
+                    showMessage={showMessage}
+                    students={students}
+                    matriculaciones={matriculaciones}
+                    materias={materias}
+                    notas={notas}
                 />
-            }
+            )}
         </div>
     );
 }

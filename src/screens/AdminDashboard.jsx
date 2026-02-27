@@ -19,7 +19,7 @@ export const AdminDashboardScreen = ({
     userClaims, navigateTo, activeTab, handleTabChange, showMessage,
     userId, students, instrumentos, addStudent, updateStudent, deleteStudent,
     matriculaciones, materias, notas, deleteMateria, notasSubTab, setNotasSubTab,
-    loadMatriculaciones, loadData
+    loadMatriculaciones, loadData, userRole
 }) => {
 
 
@@ -50,10 +50,16 @@ export const AdminDashboardScreen = ({
                     <TabButton id="notas" label="GESTIÓN DE NOTAS" isActive={activeTab === 'notas'} onClick={handleTabChange} icon={<IconReport />} vertical />
                     <TabButton id="analitico" label="ANALÍTICOS" isActive={activeTab === 'analitico'} onClick={handleTabChange} icon={<IconReport />} vertical />
                     <TabButton id="certificado" label="CERTIFICADOS" isActive={activeTab === 'certificado'} onClick={handleTabChange} icon={<IconCertificate />} vertical />
-                    <div className="pt-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Configuración</div>
-                    <TabButton id="instrumentos" label="INSTRUMENTOS" isActive={activeTab === 'instrumentos'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
-                    <TabButton id="materias" label="MATERIAS / PLANES" isActive={activeTab === 'materias'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
-                    <TabButton id="carga_masiva" label="CARGA MASIVA" isActive={activeTab === 'carga_masiva'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+
+                    {userRole === 'superadmin' && (
+                        <>
+                            <div className="pt-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Configuración</div>
+                            <TabButton id="instrumentos" label="INSTRUMENTOS" isActive={activeTab === 'instrumentos'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                            <TabButton id="materias" label="MATERIAS / PLANES" isActive={activeTab === 'materias'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                            <TabButton id="carga_masiva" label="CARGA MASIVA" isActive={activeTab === 'carga_masiva'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                            <TabButton id="usuarios" label="GESTIÓN USUARIOS" isActive={activeTab === 'usuarios'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                        </>
+                    )}
                 </nav>
 
                 <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
@@ -64,9 +70,15 @@ export const AdminDashboardScreen = ({
                     {activeTab === 'notas' && <NotasTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} notasSubTab={notasSubTab} setNotasSubTab={setNotasSubTab} loadData={loadData} />}
                     {activeTab === 'analitico' && <AnaliticoTab showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notas={notas} loadData={loadData} />}
                     {activeTab === 'certificado' && <CertificadoTab showMessage={showMessage} students={students} matriculaciones={matriculaciones} />}
-                    {activeTab === 'instrumentos' && <InstrumentosTab showMessage={showMessage} instrumentos={instrumentos} />}
-                    {activeTab === 'materias' && <MateriasTab showMessage={showMessage} materias={materias} deleteMateria={deleteMateria} />}
-                    {activeTab === 'carga_masiva' && <CargaMasivaTab showMessage={showMessage} />}
+
+                    {userRole === 'superadmin' && (
+                        <>
+                            {activeTab === 'instrumentos' && <InstrumentosTab showMessage={showMessage} instrumentos={instrumentos} />}
+                            {activeTab === 'materias' && <MateriasTab showMessage={showMessage} materias={materias} deleteMateria={deleteMateria} />}
+                            {activeTab === 'carga_masiva' && <CargaMasivaTab showMessage={showMessage} />}
+                            {activeTab === 'usuarios' && <UsuariosTab showMessage={showMessage} students={students} loadData={loadData} />}
+                        </>
+                    )}
                 </main>
             </div>
         </div>
@@ -320,7 +332,7 @@ export const MatriculacionTab = ({ showMessage, instrumentos, matriculaciones, l
     );
 };
 
-export const NotasTab = ({ showMessage, materias, students, matriculaciones, notas, notasSubTab, setNotasSubTab, loadData }) => {
+export const NotasTab = ({ showMessage, materias, students, matriculaciones, notas, notasSubTab, setNotasSubTab, loadData, userRole }) => {
     return (
         <div id="gestion_notas">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Gestión de Notas</h2>
@@ -1115,6 +1127,73 @@ export const CertificadoTab = ({ showMessage, students, matriculaciones }) => {
         </div>
     );
 };
+
+export const UsuariosTab = ({ showMessage, students, loadData }) => {
+    const handleToggleAutorizado = async (id, currentStatus) => {
+        const { error } = await supabase.from('perfiles').update({ autorizado: !currentStatus }).eq('id', id);
+        if (!error) {
+            showMessage(currentStatus ? "Acceso revocado." : "Usuario autorizado.", false);
+            loadData(true);
+        }
+    };
+
+    const handleChangeRol = async (id, newRol) => {
+        const { error } = await supabase.from('perfiles').update({ rol: newRol }).eq('id', id);
+        if (!error) {
+            showMessage(`Rol actualizado a ${newRol}.`, false);
+            loadData(true);
+        }
+    };
+
+    return (
+        <div id="admin_usuarios">
+            <h2 className="text-2xl font-semibold mb-6">Gestión de Usuarios y Permisos</h2>
+            <div className="bg-white border rounded-xl shadow-md overflow-hidden">
+                <table className="min-w-full text-sm">
+                    <thead className="bg-slate-800 text-white font-bold">
+                        <tr>
+                            <th className="p-4 text-left">Apellido y Nombre</th>
+                            <th className="p-4 text-left">DNI / Email</th>
+                            <th className="p-4 text-left">Rol</th>
+                            <th className="p-4 text-center">Autorizado</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                        {students.map(s => (
+                            <tr key={s.id} className="hover:bg-gray-50 transition">
+                                <td className="p-4 font-medium uppercase">{s.apellidos}, {s.nombres}</td>
+                                <td className="p-4 text-gray-500">
+                                    <div>{s.dni}</div>
+                                    <div className="text-[10px]">{s.email}</div>
+                                </td>
+                                <td className="p-4">
+                                    <select
+                                        value={s.rol}
+                                        onChange={(e) => handleChangeRol(s.id, e.target.value)}
+                                        className="p-2 border rounded-lg bg-gray-50 text-xs font-bold"
+                                    >
+                                        <option value="estudiante">Estudiante</option>
+                                        <option value="administrativo">Administrativo</option>
+                                        <option value="superadmin">SuperAdmin</option>
+                                    </select>
+                                </td>
+                                <td className="p-4 text-center">
+                                    <button
+                                        onClick={() => handleToggleAutorizado(s.id, s.autorizado)}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition ${s.autorizado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                                    >
+                                        {s.autorizado ? 'AUTORIZADO' : 'BLOQUEADO'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 
 const StudentForm = ({ initialData, onSubmit, buttonLabel, isEdit = false, onCancel }) => {
     const [formData, setFormData] = useState({ ...defaultStudentData, ...initialData });
