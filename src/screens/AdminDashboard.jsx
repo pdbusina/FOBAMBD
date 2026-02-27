@@ -331,7 +331,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
             </div>
             {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} allNotas={notas} loadData={loadData} />}
             {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} loadData={loadData} allNotas={notas} />}
-            {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notes={notas} />}
+            {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} loadData={loadData} />}
 
         </div>
     );
@@ -760,10 +760,246 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, lo
     );
 };
 
-const IngresarAnalitico = ({ showMessage, materias, students, matriculaciones, notes }) => {
-    return <div className="p-6 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
-        <p><strong>Nota:</strong> Para cargar el analítico completo, use la herramienta de <strong>Carga Masiva</strong> con formato JSON o utilice <strong>Ingresar Nota</strong> individualmente para cada materia histórica.</p>
-    </div>;
+const IngresarAnalitico = ({ showMessage, materias, matriculaciones, loadData }) => {
+    const [step, setStep] = useState(1); // 1: Buscar DNI, 2: Seleccionar Plan, 3: Grilla Editable
+    const [dniSearch, setDniSearch] = useState('');
+    const [studentInfo, setStudentInfo] = useState(null);
+    const [foundPlans, setFoundPlans] = useState([]);
+    const [selectedPlan, setSelectedPlan] = useState('');
+    const [loadingLocal, setLoadingLocal] = useState(false);
+    const [rows, setRows] = useState([]);
+    const [saving, setSaving] = useState(false);
+
+    const handleDniSearch = async (e) => {
+        e.preventDefault();
+        if (!dniSearch) return showMessage("Ingrese un DNI.", true);
+        setLoadingLocal(true);
+
+        try {
+            const { data: student, error: sErr } = await supabase.from('perfiles').select('*').eq('dni', dniSearch).single();
+            if (sErr || !student) {
+                showMessage("Estudiante no encontrado.", true);
+                setLoadingLocal(false);
+                return;
+            }
+            setStudentInfo(student);
+
+            const { data: mats, error: mErr } = await supabase.from('matriculaciones').select('*').eq('estudiante_id', student.id);
+            if (mErr || !mats || mats.length === 0) {
+                showMessage("El estudiante no tiene matriculaciones.", true);
+                setLoadingLocal(false);
+                return;
+            }
+
+            const planes = [...new Set(mats.map(m => m.plan))];
+            setFoundPlans(mats); // Guardamos todas las matriculaciones para tener los IDs
+
+            if (planes.length === 1) {
+                handlePlanSelection(planes[0], mats);
+            } else {
+                setStep(2);
+            }
+        } catch (err) {
+            showMessage("Error al buscar estudiante.", true);
+        } finally {
+            setLoadingLocal(false);
+        }
+    };
+
+    const handlePlanSelection = async (plan, allMats) => {
+        setLoadingLocal(true);
+        setSelectedPlan(plan);
+
+        try {
+            // Materias del plan
+            const planMaterias = materias.filter(m => m.plan === plan).sort((a, b) => a.anio - b.anio || a.nombre.localeCompare(b.nombre));
+
+            // Notas actuales del estudiante (independiente del plan si el nombre coincide)
+            const { data: nts, error: nErr } = await supabase
+                .from('notas')
+                .select('*, materias(nombre)')
+                .eq('matriculacion_id', allMats.find(m => m.plan === plan).id);
+
+            if (nErr) throw nErr;
+
+            const gridRows = planMaterias.map(m => {
+                const notaExistente = nts.find(n => n.materia_id === m.id);
+                return {
+                    materiaId: m.id,
+                    materiaNombre: m.nombre,
+                    anio: m.anio,
+                    notaId: notaExistente?.id || null,
+                    calificacion: notaExistente?.calificacion || '',
+                    condicion: notaExistente?.condicion || 'Promoción',
+                    fecha: notaExistente?.fecha || new Date().toISOString().split('T')[0],
+                    libroFolio: notaExistente?.libro_folio || '',
+                    observaciones: notaExistente?.observaciones || '',
+                    esEspecial: /ensamble|optativa|espacio/i.test(m.nombre)
+                };
+            });
+
+            setRows(gridRows);
+            setStep(3);
+        } catch (err) {
+            showMessage("Error al cargar materias del plan.", true);
+        } finally {
+            setLoadingLocal(false);
+        }
+    };
+
+    const updateRow = (idx, field, value) => {
+        const newRows = [...rows];
+        newRows[idx][field] = value;
+        setRows(newRows);
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        const matriculacionId = foundPlans.find(m => m.plan === selectedPlan).id;
+
+        const inserts = [];
+        const updates = [];
+
+        for (const r of rows) {
+            if (!r.calificacion) continue;
+
+            const notaData = {
+                matriculacion_id: matriculacionId,
+                materia_id: r.materiaId,
+                calificacion: r.calificacion,
+                condicion: r.condicion,
+                fecha: r.fecha,
+                libro_folio: r.libroFolio,
+                observaciones: r.observaciones
+            };
+
+            if (r.notaId) {
+                updates.push(supabase.from('notas').update(notaData).eq('id', r.notaId));
+            } else {
+                inserts.push(notaData);
+            }
+        }
+
+        try {
+            if (inserts.length > 0) {
+                const { error } = await supabase.from('notas').insert(inserts);
+                if (error) throw error;
+            }
+            if (updates.length > 0) {
+                const results = await Promise.all(updates);
+                for (const res of results) if (res.error) throw res.error;
+            }
+
+            showMessage("Analítico actualizado con éxito.", false);
+            if (loadData) loadData(true);
+            setStep(1);
+            setDniSearch('');
+        } catch (err) {
+            showMessage(`Error al guardar: ${err.message}`, true);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            {step === 1 && (
+                <div className="max-w-xl mx-auto p-8 bg-white border rounded-2xl shadow-sm">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Cargar Analítico Completo</h3>
+                    <p className="text-sm text-gray-500 mb-6">Busque un estudiante por DNI para editar su trayectoria académica completa.</p>
+                    <form onSubmit={handleDniSearch} className="flex space-x-2">
+                        <input type="text" value={dniSearch} onChange={(e) => setDniSearch(e.target.value)} className="flex-grow p-4 border rounded-xl shadow-inner" placeholder="Ingrese DNI..." required />
+                        <button type="submit" disabled={loadingLocal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 rounded-xl font-bold transition disabled:bg-gray-400">
+                            {loadingLocal ? <IconLoading /> : 'Buscar'}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {step === 2 && studentInfo && (
+                <div className="max-w-xl mx-auto p-8 bg-white border rounded-2xl shadow-lg">
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Múltiples Planes Detectados</h3>
+                    <p className="text-sm text-gray-600 mb-6">Seleccione el plan de estudios del alumno <strong>{studentInfo.apellidos}, {studentInfo.nombres}</strong> que desea editar:</p>
+                    <div className="space-y-2">
+                        {[...new Set(foundPlans.map(m => m.plan))].map(p => (
+                            <button key={p} onClick={() => handlePlanSelection(p, foundPlans)} className="w-full p-4 text-left border rounded-xl hover:bg-indigo-50 hover:border-indigo-300 transition font-medium">
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={() => setStep(1)} className="mt-6 text-indigo-600 text-sm font-medium hover:underline">Volver a buscar</button>
+                </div>
+            )}
+
+            {step === 3 && (
+                <div className="bg-white border rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[80vh]">
+                    <div className="p-4 bg-indigo-700 text-white flex justify-between items-center">
+                        <div className="flex items-center space-x-4">
+                            <div className="bg-white/20 p-2 rounded-lg"><IconPrint /></div>
+                            <div>
+                                <h3 className="font-bold text-lg">{studentInfo.apellidos}, {studentInfo.nombres}</h3>
+                                <p className="text-indigo-100 text-xs">Editando Analítico: {selectedPlan}</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setStep(1)} className="text-indigo-100 hover:text-white transition text-xs font-medium uppercase tracking-wider">Cancelar Edición</button>
+                    </div>
+
+                    <div className="overflow-auto flex-grow">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-gray-100 sticky top-0 z-10 border-b shadow-sm font-bold text-gray-600">
+                                <tr className="uppercase text-[10px] tracking-wider">
+                                    <th className="p-4 text-left">Materia</th>
+                                    <th className="p-4 text-center w-24">Nota</th>
+                                    <th className="p-4 text-left w-32">Condición</th>
+                                    <th className="p-4 text-left w-36">Fecha</th>
+                                    <th className="p-4 text-left w-24">Libro/Folio</th>
+                                    <th className="p-4 text-left min-w-[200px]">Detalle / Obs</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {rows.map((r, idx) => (
+                                    <tr key={r.materiaId} className="hover:bg-indigo-50/50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="font-bold text-gray-700">{r.materiaNombre}</div>
+                                            <div className="text-[10px] text-gray-400 font-mono">{r.anio}° Año</div>
+                                        </td>
+                                        <td className="p-4">
+                                            <input type="text" value={r.calificacion} onChange={(e) => updateRow(idx, 'calificacion', e.target.value)} className="w-full p-2 border rounded-lg text-center font-bold text-indigo-700 bg-indigo-50 shadow-inner focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                                        </td>
+                                        <td className="p-4">
+                                            <select value={r.condicion} onChange={(e) => updateRow(idx, 'condicion', e.target.value)} className="w-full p-2 border rounded-lg bg-white text-xs">
+                                                <option value="Promoción">Promoción</option>
+                                                <option value="Examen Final">Examen Final</option>
+                                                <option value="Equivalencia">Equivalencia</option>
+                                            </select>
+                                        </td>
+                                        <td className="p-4">
+                                            <input type="date" value={r.fecha} onChange={(e) => updateRow(idx, 'fecha', e.target.value)} className="w-full p-2 border rounded-lg text-xs" />
+                                        </td>
+                                        <td className="p-4">
+                                            <input type="text" value={r.libroFolio} onChange={(e) => updateRow(idx, 'libroFolio', e.target.value)} className="w-full p-2 border rounded-lg text-xs" placeholder="LB_FL" />
+                                        </td>
+                                        <td className="p-4">
+                                            <input type="text" value={r.observaciones} onChange={(e) => updateRow(idx, 'observaciones', e.target.value)} className={`w-full p-2 border rounded-lg text-xs ${r.esEspecial ? 'bg-yellow-50 border-yellow-200' : ''}`} placeholder={r.esEspecial ? 'Detalle obligatorio (ej: Guitarra)' : 'Observaciones...'} />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="p-6 bg-gray-50 border-t flex space-x-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                        <button onClick={() => setStep(1)} className="flex-1 py-4 border-2 border-gray-200 text-gray-600 rounded-2xl font-bold bg-white hover:bg-gray-50 transition active:scale-[0.98]">
+                            Descartar Cambios
+                        </button>
+                        <button onClick={handleSave} disabled={saving} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold shadow-lg transition transform active:scale-[0.98] disabled:bg-gray-400">
+                            {saving ? 'Guardando trayectorias...' : `Guardar Analitico Completo (${rows.filter(r => r.calificacion !== '').length} notas)`}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 
