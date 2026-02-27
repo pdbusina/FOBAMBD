@@ -330,7 +330,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
                 <TabButton id="ingresar_analitico" label="Ingresar Analítico" isActive={notasSubTab === 'ingresar_analitico'} onClick={setNotasSubTab} />
             </div>
             {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} allNotas={notas} loadData={loadData} />}
-            {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} loadData={loadData} />}
+            {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} loadData={loadData} allNotas={notas} />}
             {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notes={notas} />}
 
         </div>
@@ -506,7 +506,7 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones, allNot
     );
 };
 
-const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, loadData }) => {
+const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, loadData, allNotas }) => {
     const [step, setStep] = useState(1); // 1: Configuración, 2: Carga de Datos
     const [selectedMateriaId, setSelectedMateriaId] = useState('');
     const [fechaGeneral, setFechaGeneral] = useState(new Date().toISOString().split('T')[0]);
@@ -546,14 +546,27 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, lo
 
         // Buscar estudiante matriculado este año (o simplemente en matriculaciones generales)
         const matricula = matriculaciones.find(m => m.dni === dni);
+
+        // 2. Buscar si ya tiene nota en esta materia (trans-plan)
+        const materia = materias.find(m => m.id === selectedMateriaId);
+        const notaPrevia = allNotas?.find(n =>
+            n.dni === dni &&
+            n.materia?.trim().toLowerCase() === materia?.nombre?.trim().toLowerCase()
+        );
+
         if (matricula) {
             newData[idx].alumnoId = matricula.estudiante_id;
             newData[idx].nombreCompleto = `${matricula.apellidos}, ${matricula.nombres}`;
             newData[idx].matriculacionId = matricula.id;
+            newData[idx].notaPrevia = notaPrevia ? { id: notaPrevia.id, nota: notaPrevia.nota } : null;
+            if (notaPrevia) {
+                newData[idx].nota = notaPrevia.nota; // Sugerir la nota actual si existe para editar
+            }
         } else {
             newData[idx].alumnoId = '';
             newData[idx].nombreCompleto = '';
             newData[idx].matriculacionId = '';
+            newData[idx].notaPrevia = null;
         }
         setPlanillaData(newData);
     };
@@ -567,8 +580,10 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, lo
     const handleSavePlanilla = async () => {
         setLoading(true);
 
+        const inserts = [];
+        const updates = [];
+
         // Validar que todos tengan matriculacionId y nota válida
-        const recordsToInsert = [];
         for (const p of planillaData) {
             if (!p.matriculacionId || !p.nota) continue;
 
@@ -586,7 +601,7 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, lo
                 }
             }
 
-            recordsToInsert.push({
+            const notaData = {
                 matriculacion_id: p.matriculacionId,
                 materia_id: selectedMateriaId,
                 calificacion: p.nota,
@@ -594,26 +609,41 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, lo
                 fecha: fechaGeneral,
                 libro_folio: libroFolio,
                 observaciones: observacionEspecial
-            });
+            };
+
+            if (p.notaPrevia) {
+                updates.push(supabase.from('notas').update(notaData).eq('id', p.notaPrevia.id));
+            } else {
+                inserts.push(notaData);
+            }
         }
 
-        if (recordsToInsert.length === 0) {
+        if (inserts.length === 0 && updates.length === 0) {
             showMessage("Complete los datos de al menos un alumno.", true);
             setLoading(false);
             return;
         }
 
-        const { error } = await supabase.from('notas').insert(recordsToInsert);
-        if (!error) {
-            showMessage(`Planilla cargada con éxito (${recordsToInsert.length} notas).`, false);
+        try {
+            if (inserts.length > 0) {
+                const { error } = await supabase.from('notas').insert(inserts);
+                if (error) throw error;
+            }
+            if (updates.length > 0) {
+                const results = await Promise.all(updates);
+                for (const res of results) if (res.error) throw res.error;
+            }
+
+            showMessage("Planilla procesada con éxito.", false);
             if (loadData) loadData(true);
             setStep(1);
             setSelectedMateriaId('');
             setPlanillaData([]);
-        } else {
-            showMessage(`Error: ${error.message}`, true);
+        } catch (err) {
+            showMessage(`Error: ${err.message}`, true);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     return (
@@ -699,6 +729,7 @@ const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, lo
                                     <td className="p-4">
                                         <div className={`p-2 rounded font-medium ${p.nombreCompleto ? 'text-indigo-700 bg-indigo-50' : 'text-gray-400 italic'}`}>
                                             {p.nombreCompleto || 'Buscando alumno...'}
+                                            {p.notaPrevia && <span className="ml-2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">Nota Previa: {p.notaPrevia.nota}</span>}
                                         </div>
                                     </td>
                                     <td className="p-4 text-center">
