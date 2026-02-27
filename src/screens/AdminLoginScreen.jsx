@@ -82,12 +82,12 @@ const AdminLoginScreen = ({ navigateTo, showMessage }) => {
                         <>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Nombre</label>
-                                    <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border" required />
+                                    <label className="block text-sm font-bold text-indigo-700">Nombre</label>
+                                    <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 block w-full rounded-md border-indigo-200 shadow-sm p-3 border focus:ring-2 focus:ring-indigo-500" placeholder="Ej: Juan" required />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Apellido</label>
-                                    <input type="text" value={apellido} onChange={(e) => setApellido(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border" required />
+                                    <label className="block text-sm font-bold text-indigo-700">Apellido</label>
+                                    <input type="text" value={apellido} onChange={(e) => setApellido(e.target.value)} className="mt-1 block w-full rounded-md border-indigo-200 shadow-sm p-3 border focus:ring-2 focus:ring-indigo-500" placeholder="Ej: Pérez" required />
                                 </div>
                             </div>
                         </>
