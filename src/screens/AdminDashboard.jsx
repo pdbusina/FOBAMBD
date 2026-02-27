@@ -330,7 +330,7 @@ export const NotasTab = ({ showMessage, materias, students, matriculaciones, not
                 <TabButton id="ingresar_analitico" label="Ingresar Analítico" isActive={notasSubTab === 'ingresar_analitico'} onClick={setNotasSubTab} />
             </div>
             {notasSubTab === 'ingresar_nota' && <IngresarNotaIndividual showMessage={showMessage} materias={materias} matriculaciones={matriculaciones} allNotas={notas} loadData={loadData} />}
-            {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} />}
+            {notasSubTab === 'ingresar_planilla' && <IngresarPlanilla showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} loadData={loadData} />}
             {notasSubTab === 'ingresar_analitico' && <IngresarAnalitico showMessage={showMessage} materias={materias} students={students} matriculaciones={matriculaciones} notes={notas} />}
 
         </div>
@@ -506,90 +506,221 @@ const IngresarNotaIndividual = ({ showMessage, materias, matriculaciones, allNot
     );
 };
 
-const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones }) => {
+const IngresarPlanilla = ({ showMessage, materias, students, matriculaciones, loadData }) => {
+    const [step, setStep] = useState(1); // 1: Configuración, 2: Carga de Datos
     const [selectedMateriaId, setSelectedMateriaId] = useState('');
+    const [fechaGeneral, setFechaGeneral] = useState(new Date().toISOString().split('T')[0]);
+    const [condicionGeneral, setCondicionGeneral] = useState('Promoción');
+    const [libroFolio, setLibroFolio] = useState('');
+    const [cantidadAlumnos, setCantidadAlumnos] = useState(1);
+    const [observacionEspecial, setObservacionEspecial] = useState('');
     const [planillaData, setPlanillaData] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [fechaGeneral, setFechaGeneral] = useState(new Date().toISOString().split('T')[0]);
 
-    useEffect(() => {
-        if (selectedMateriaId) {
-            const materia = materias.find(m => m.id === selectedMateriaId);
-            const alumnosMatriculados = matriculaciones.filter(m => m.plan === materia.plan);
-            setPlanillaData(alumnosMatriculados.map(a => ({
-                id: a.id,
-                dni: a.dni,
-                nombreCompleto: `${a.apellidos}, ${a.nombres}`,
+    const isMateriaEspecial = useMemo(() => {
+        const m = materias.find(mat => mat.id === selectedMateriaId);
+        return m ? /ensamble|optativa|espacio/i.test(m.nombre) : false;
+    }, [selectedMateriaId, materias]);
+
+    const handleConfigSubmit = (e) => {
+        e.preventDefault();
+        if (!selectedMateriaId) return showMessage("Seleccione una materia.", true);
+
+        const rows = [];
+        for (let i = 0; i < cantidadAlumnos; i++) {
+            rows.push({
+                dni: '',
+                alumnoId: '',
+                nombreCompleto: '',
                 nota: '',
-                condicion: 'Promoción'
-            })));
+                matriculacionId: ''
+            });
         }
-    }, [selectedMateriaId, materias, matriculaciones]);
+        setPlanillaData(rows);
+        setStep(2);
+    };
+
+    const handleDniChange = (idx, dni) => {
+        const newData = [...planillaData];
+        newData[idx].dni = dni;
+
+        // Buscar estudiante matriculado este año (o simplemente en matriculaciones generales)
+        const matricula = matriculaciones.find(m => m.dni === dni);
+        if (matricula) {
+            newData[idx].alumnoId = matricula.estudiante_id;
+            newData[idx].nombreCompleto = `${matricula.apellidos}, ${matricula.nombres}`;
+            newData[idx].matriculacionId = matricula.id;
+        } else {
+            newData[idx].alumnoId = '';
+            newData[idx].nombreCompleto = '';
+            newData[idx].matriculacionId = '';
+        }
+        setPlanillaData(newData);
+    };
+
+    const handleNotaChange = (idx, nota) => {
+        const newData = [...planillaData];
+        newData[idx].nota = nota;
+        setPlanillaData(newData);
+    };
 
     const handleSavePlanilla = async () => {
         setLoading(true);
-        const recordsToInsert = planillaData.filter(p => p.nota !== '').map(p => ({
-            matriculacion_id: p.id,
-            materia_id: selectedMateriaId,
-            calificacion: p.nota,
-            condicion: p.condicion,
-            fecha: fechaGeneral
-        }));
 
-        if (recordsToInsert.length === 0) { showMessage("No hay notas para cargar.", true); setLoading(false); return; }
+        // Validar que todos tengan matriculacionId y nota válida
+        const recordsToInsert = [];
+        for (const p of planillaData) {
+            if (!p.matriculacionId || !p.nota) continue;
+
+            const valorNota = parseFloat(p.nota);
+            if (!isNaN(valorNota)) {
+                if (condicionGeneral === 'Promoción' && valorNota < 7) {
+                    showMessage(`Error en ${p.nombreCompleto}: Nota insuficiente para Promoción.`, true);
+                    setLoading(false);
+                    return;
+                }
+                if (condicionGeneral !== 'Promoción' && valorNota < 4) {
+                    showMessage(`Error en ${p.nombreCompleto}: Nota insuficiente para aprobar.`, true);
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            recordsToInsert.push({
+                matriculacion_id: p.matriculacionId,
+                materia_id: selectedMateriaId,
+                calificacion: p.nota,
+                condicion: condicionGeneral,
+                fecha: fechaGeneral,
+                libro_folio: libroFolio,
+                observaciones: observacionEspecial
+            });
+        }
+
+        if (recordsToInsert.length === 0) {
+            showMessage("Complete los datos de al menos un alumno.", true);
+            setLoading(false);
+            return;
+        }
 
         const { error } = await supabase.from('notas').insert(recordsToInsert);
-        if (!error) { showMessage("Planilla cargada con éxito.", false); setPlanillaData([]); setSelectedMateriaId(''); }
-        else { showMessage(`Error: ${error.message}`, true); }
+        if (!error) {
+            showMessage(`Planilla cargada con éxito (${recordsToInsert.length} notas).`, false);
+            if (loadData) loadData(true);
+            setStep(1);
+            setSelectedMateriaId('');
+            setPlanillaData([]);
+        } else {
+            showMessage(`Error: ${error.message}`, true);
+        }
         setLoading(false);
     };
 
     return (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Materia / Plan</label>
-                    <select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded-lg bg-white shadow-sm">
-                        <option value="">Seleccione Materia...</option>
-                        {materias.map(m => <option key={m.id} value={m.id}>({m.plan}) {m.nombre} - {m.anio}° Año</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha General</label>
-                    <input type="date" value={fechaGeneral} onChange={(e) => setFechaGeneral(e.target.value)} className="w-full p-3 border rounded-lg bg-white shadow-sm" />
-                </div>
-            </div>
+        <div className="space-y-6">
+            {step === 1 && (
+                <form onSubmit={handleConfigSubmit} className="bg-white p-6 rounded-xl border shadow-sm space-y-4 max-w-3xl mx-auto">
+                    <h3 className="text-lg font-bold text-gray-700 border-b pb-2">Configuración de Planilla</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Materia / Plan</label>
+                            <select value={selectedMateriaId} onChange={(e) => setSelectedMateriaId(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50" required>
+                                <option value="">Seleccione Materia...</option>
+                                {materias.map(m => <option key={m.id} value={m.id}>({m.plan}) {m.nombre} - {m.anio}° Año</option>)}
+                            </select>
+                        </div>
 
-            {selectedMateriaId && planillaData.length > 0 && (
+                        {isMateriaEspecial && (
+                            <div className="md:col-span-2">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Observación Materia Específica (Detalle)</label>
+                                <input type="text" value={observacionEspecial} onChange={(e) => setObservacionEspecial(e.target.value)} className="w-full p-3 border rounded-lg bg-yellow-50 border-yellow-200" placeholder="Ej: Guitarra, Coro, etc." required />
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha General</label>
+                            <input type="date" value={fechaGeneral} onChange={(e) => setFechaGeneral(e.target.value)} className="w-full p-3 border rounded-lg" required />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Condición General</label>
+                            <select value={condicionGeneral} onChange={(e) => setCondicionGeneral(e.target.value)} className="w-full p-3 border rounded-lg">
+                                <option value="Promoción">Promoción</option>
+                                <option value="Examen Final">Examen Final</option>
+                                <option value="Equivalencia">Equivalencia</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Libro / Folio</label>
+                            <input type="text" value={libroFolio} onChange={(e) => setLibroFolio(e.target.value)} className="w-full p-3 border rounded-lg" placeholder="Opcional..." />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad de Estudiantes</label>
+                            <input type="number" min="1" max="50" value={cantidadAlumnos} onChange={(e) => setCantidadAlumnos(parseInt(e.target.value))} className="w-full p-3 border rounded-lg" required />
+                        </div>
+                    </div>
+                    <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-md transition transform active:scale-95">
+                        Generar Grilla de Carga
+                    </button>
+                </form>
+            )}
+
+            {step === 2 && (
                 <div className="bg-white border rounded-xl shadow-lg overflow-hidden transition-all duration-300">
+                    <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                        <div>
+                            <h3 className="font-bold text-indigo-800">Cargando: {materias.find(m => m.id === selectedMateriaId)?.nombre}</h3>
+                            <p className="text-xs text-gray-500">{condicionGeneral} - {fechaGeneral}</p>
+                        </div>
+                        <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-red-500 underline">Cambiar Configuración</button>
+                    </div>
                     <table className="min-w-full text-sm">
-                        <thead className="bg-gray-100 italic border-b text-gray-600">
+                        <thead className="bg-gray-100 italic border-b text-gray-600 font-bold">
                             <tr>
-                                <th className="p-4 text-left font-bold">Alumno</th>
-                                <th className="p-4 text-center w-24 font-bold">Nota</th>
-                                <th className="p-4 text-left w-48 font-bold">Condición</th>
+                                <th className="p-4 text-left w-48">DNI</th>
+                                <th className="p-4 text-left">Alumno (Autocompletado)</th>
+                                <th className="p-4 text-center w-24">Nota</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {planillaData.map((p, idx) => (
-                                <tr key={p.id} className="hover:bg-indigo-50 transition">
-                                    <td className="p-4 font-medium">{p.nombreCompleto}</td>
-                                    <td className="p-4 text-center"><input type="text" value={p.nota} onChange={(e) => { const nd = [...planillaData]; nd[idx].nota = e.target.value; setPlanillaData(nd); }} className="w-16 border rounded-lg p-2 text-center shadow-inner" placeholder="-" /></td>
+                                <tr key={idx} className="hover:bg-indigo-50 transition">
                                     <td className="p-4">
-                                        <select value={p.condicion} onChange={(e) => { const nd = [...planillaData]; nd[idx].condicion = e.target.value; setPlanillaData(nd); }} className="w-full border rounded-lg p-2 bg-gray-50 text-sm">
-                                            <option value="Promoción">Promoción</option>
-                                            <option value="Examen">Examen</option>
-                                            <option value="Regular">Regular</option>
-                                            <option value="Equivalencia">Equivalencia</option>
-                                        </select>
+                                        <input
+                                            type="text"
+                                            value={p.dni}
+                                            onChange={(e) => handleDniChange(idx, e.target.value)}
+                                            className="w-full border rounded-lg p-2 shadow-inner"
+                                            placeholder="Ingrese DNI..."
+                                        />
+                                    </td>
+                                    <td className="p-4">
+                                        <div className={`p-2 rounded font-medium ${p.nombreCompleto ? 'text-indigo-700 bg-indigo-50' : 'text-gray-400 italic'}`}>
+                                            {p.nombreCompleto || 'Buscando alumno...'}
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        <input
+                                            type="text"
+                                            value={p.nota}
+                                            onChange={(e) => handleNotaChange(idx, e.target.value)}
+                                            className="w-16 border rounded-lg p-2 text-center shadow-inner font-bold"
+                                            placeholder="-"
+                                            disabled={!p.matriculacionId}
+                                        />
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
-                    <div className="p-4 bg-gray-50 border-t">
-                        <button onClick={handleSavePlanilla} disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md transition transform active:scale-95 disabled:bg-gray-400">
-                            {loading ? 'Procesando...' : `Guardar Notas para ${planillaData.filter(p => p.nota !== '').length} Alumnos`}
+                    <div className="p-6 bg-gray-50 border-t flex space-x-4">
+                        <button onClick={() => setStep(1)} className="flex-1 py-4 border rounded-xl font-bold hover:bg-white transition shadow-sm">
+                            Atrás
+                        </button>
+                        <button onClick={handleSavePlanilla} disabled={loading} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md transition transform active:scale-95 disabled:bg-gray-400">
+                            {loading ? 'Procesando...' : `Guardar ${planillaData.filter(p => p.nota !== '').length} Notas Finales`}
                         </button>
                     </div>
                 </div>

@@ -14,33 +14,69 @@ export const AnaliticoTab = ({
     const [selectedPlan, setSelectedPlan] = useState('');
     const [studentInfo, setStudentInfo] = useState(null);
 
-    const handleDniSearch = (e) => {
+    const [loadingLocal, setLoadingLocal] = useState(false);
+    const [freshNotas, setFreshNotas] = useState([]);
+
+    const handleDniSearch = async (e) => {
         e.preventDefault();
         if (!dniSearch) return showMessage("Ingrese un DNI.", true);
+        setLoadingLocal(true);
 
-        const student = students.find(s => s.dni === dniSearch);
-        if (!student) {
-            showMessage(`Estudiante con DNI ${dniSearch} no encontrado.`, true);
-            return;
-        }
+        try {
+            // 1. Buscar Perfil del Estudiante
+            const { data: student, error: sErr } = await supabase.from('perfiles').select('*').eq('dni', dniSearch).single();
+            if (sErr || !student) {
+                showMessage(`Estudiante con DNI ${dniSearch} no encontrado.`, true);
+                setLoadingLocal(false);
+                return;
+            }
+            setStudentInfo(student);
 
-        // Refrescar datos para asegurar que las notas son las últimas
-        if (loadData) loadData(true);
+            // 2. Buscar Matriculaciones del Estudiante
+            const { data: mats, error: mErr } = await supabase.from('matriculaciones').select('*').eq('estudiante_id', student.id);
+            if (mErr || !mats || mats.length === 0) {
+                showMessage(`El estudiante no tiene matriculaciones activas.`, true);
+                setLoadingLocal(false);
+                return;
+            }
 
-        setStudentInfo(student);
-        const planes = [...new Set(matriculaciones.filter(m => m.dni === dniSearch).map(m => m.plan))];
+            // 3. Buscar Notas del Estudiante (ConsultaDirecta)
+            const matriculaIds = mats.map(m => m.id);
+            const { data: nts, error: nErr } = await supabase
+                .from('notas')
+                .select('*, materias(nombre)')
+                .in('matriculacion_id', matriculaIds);
 
-        if (planes.length === 0) {
-            showMessage(`El estudiante no tiene matriculaciones activas.`, true);
-            return;
-        }
+            if (nErr) throw nErr;
 
-        if (planes.length > 1) {
-            setFoundPlans(planes);
-            setStep(2);
-        } else {
-            setSelectedPlan(planes[0]);
-            setStep(3);
+            // Mapear notas al formato esperado por AnaliticoReport
+            const mappedNotas = nts.map(n => ({
+                id: n.id,
+                dni: dniSearch,
+                materia: n.materias?.nombre,
+                nota: n.calificacion,
+                condicion: n.condicion,
+                fecha: n.fecha,
+                libro_folio: n.libro_folio,
+                observaciones: n.observaciones,
+                obs_optativa_ensamble: n.obs_detalle
+            }));
+
+            setFreshNotas(mappedNotas);
+
+            const planes = [...new Set(mats.map(m => m.plan))];
+            if (planes.length > 1) {
+                setFoundPlans(planes);
+                setStep(2);
+            } else {
+                setSelectedPlan(planes[0]);
+                setStep(3);
+            }
+        } catch (err) {
+            console.error("Error en búsqueda analítica:", err);
+            showMessage("Error al consultar la base de datos.", true);
+        } finally {
+            setLoadingLocal(false);
         }
     };
 
@@ -74,7 +110,9 @@ export const AnaliticoTab = ({
                             placeholder="Buscar DNI..."
                             required
                         />
-                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-5 rounded-lg shadow transition">Buscar</button>
+                        <button type="submit" disabled={loadingLocal} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-5 rounded-lg shadow transition disabled:bg-gray-400">
+                            {loadingLocal ? <IconLoading /> : 'Buscar'}
+                        </button>
                     </div>
                 </form>
             )}
@@ -98,7 +136,7 @@ export const AnaliticoTab = ({
                 <AnaliticoReport
                     student={studentInfo}
                     plan={selectedPlan}
-                    allNotas={notas}
+                    allNotas={freshNotas}
                     allMaterias={materias}
                     onCancel={resetForm}
                 />
