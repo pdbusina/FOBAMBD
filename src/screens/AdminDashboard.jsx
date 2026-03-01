@@ -42,18 +42,21 @@ export const AdminDashboardScreen = ({
             </header>
 
             <div className="flex flex-1 overflow-hidden">
-                <nav className="w-64 bg-slate-800 text-slate-300 p-4 space-y-2 flex-shrink-0 no-print overflow-y-auto">
-                    <TabButton id="inscribir" label="ESTUDIANTES" isActive={activeTab === 'inscribir'} onClick={handleTabChange} icon={<IconUser />} vertical />
-                    <TabButton id="matricular" label="MATRICULACIÓN" isActive={activeTab === 'matricular'} onClick={handleTabChange} icon={<IconCertificate />} vertical />
-                    <TabButton id="listado" label="LISTADO GENERAL" isActive={activeTab === 'listado'} onClick={handleTabChange} icon={<IconUser />} vertical />
-                    <div className="pt-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Académico</div>
+                <nav className="w-64 bg-slate-100 border-r border-gray-200 p-4 space-y-2 overflow-y-auto no-print">
+                    <div className="pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Gestión Académica</div>
+                    <TabButton id="inscribir" label="INSCRIBIR ALUMNO" isActive={activeTab === 'inscribir'} onClick={handleTabChange} icon={<IconUser />} vertical />
                     <TabButton id="notas" label="GESTIÓN DE NOTAS" isActive={activeTab === 'notas'} onClick={handleTabChange} icon={<IconReport />} vertical />
                     <TabButton id="analitico" label="ANALÍTICOS" isActive={activeTab === 'analitico'} onClick={handleTabChange} icon={<IconReport />} vertical />
                     <TabButton id="certificado" label="CERTIFICADOS" isActive={activeTab === 'certificado'} onClick={handleTabChange} icon={<IconCertificate />} vertical />
-                    <div className="pt-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Configuración</div>
-                    <TabButton id="instrumentos" label="INSTRUMENTOS" isActive={activeTab === 'instrumentos'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
-                    <TabButton id="materias" label="MATERIAS / PLANES" isActive={activeTab === 'materias'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
-                    <TabButton id="carga_masiva" label="CARGA MASIVA" isActive={activeTab === 'carga_masiva'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+
+                    {userClaims?.isSuperAdmin && (
+                        <>
+                            <div className="pt-4 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Configuración</div>
+                            <TabButton id="instrumentos" label="INSTRUMENTOS" isActive={activeTab === 'instrumentos'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                            <TabButton id="materias" label="MATERIAS / PLANES" isActive={activeTab === 'materias'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                            <TabButton id="carga_masiva" label="CARGA MASIVA" isActive={activeTab === 'carga_masiva'} onClick={handleTabChange} icon={<IconAdmin />} vertical />
+                        </>
+                    )}
                 </nav>
 
                 <main className="flex-1 p-8 overflow-y-auto bg-gray-50">

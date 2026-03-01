@@ -169,7 +169,17 @@ export default function App() {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
                 setUserId(session.user.id);
-                setUserClaims(session.user.user_metadata);
+                // Normalizar claims para evitar metadatos obsoletos ("Bypass")
+                const email = session.user.email;
+                const isSuperAdmin = email === 'businatrabajo@gmail.com';
+                const isAdmin = isSuperAdmin || email === 'preceptores@fobam.esmn';
+
+                setUserClaims({
+                    ...session.user.user_metadata,
+                    role: isAdmin ? 'admin' : (session.user.user_metadata?.role || 'user'),
+                    isSuperAdmin,
+                    nombre: isSuperAdmin ? 'SuperAdmin' : (email === 'preceptores@fobam.esmn' ? 'Preceptor' : (session.user.user_metadata?.nombre || 'Admin'))
+                });
             }
             setLoading(false);
         });
@@ -177,7 +187,17 @@ export default function App() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (session) {
                 setUserId(session.user.id);
-                setUserClaims(session.user.user_metadata);
+                // Normalizar claims
+                const email = session.user.email;
+                const isSuperAdmin = email === 'businatrabajo@gmail.com';
+                const isAdmin = isSuperAdmin || email === 'preceptores@fobam.esmn';
+
+                setUserClaims({
+                    ...session.user.user_metadata,
+                    role: isAdmin ? 'admin' : (session.user.user_metadata?.role || 'user'),
+                    isSuperAdmin,
+                    nombre: isSuperAdmin ? 'SuperAdmin' : (email === 'preceptores@fobam.esmn' ? 'Preceptor' : (session.user.user_metadata?.nombre || 'Admin'))
+                });
             } else if (event === 'SIGNED_OUT') {
                 setUserId(null);
                 setUserClaims(null);
