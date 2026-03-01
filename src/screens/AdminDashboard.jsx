@@ -44,7 +44,9 @@ export const AdminDashboardScreen = ({
             <div className="flex flex-1 overflow-hidden">
                 <nav className="w-64 bg-slate-100 border-r border-gray-200 p-4 space-y-2 overflow-y-auto no-print">
                     <div className="pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Gestión Académica</div>
-                    <TabButton id="inscribir" label="INSCRIBIR ALUMNO" isActive={activeTab === 'inscribir'} onClick={handleTabChange} icon={<IconUser />} vertical />
+                    <TabButton id="inscribir" label="ESTUDIANTES" isActive={activeTab === 'inscribir'} onClick={handleTabChange} icon={<IconUser />} vertical />
+                    <TabButton id="matricular" label="MATRICULACIÓN" isActive={activeTab === 'matricular'} onClick={handleTabChange} icon={<IconCertificate />} vertical />
+                    <TabButton id="listado" label="LISTADO GENERAL" isActive={activeTab === 'listado'} onClick={handleTabChange} icon={<IconUser />} vertical />
                     <TabButton id="notas" label="GESTIÓN DE NOTAS" isActive={activeTab === 'notas'} onClick={handleTabChange} icon={<IconReport />} vertical />
                     <TabButton id="analitico" label="ANALÍTICOS" isActive={activeTab === 'analitico'} onClick={handleTabChange} icon={<IconReport />} vertical />
                     <TabButton id="certificado" label="CERTIFICADOS" isActive={activeTab === 'certificado'} onClick={handleTabChange} icon={<IconCertificate />} vertical />

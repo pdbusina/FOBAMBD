@@ -110,7 +110,10 @@ export default function App() {
         try {
             if (!isSilent) setLoading(true);
             const { data: profiles, error: pError } = await supabase.from('perfiles').select('*');
-            if (pError) throw pError;
+            if (pError) {
+                console.error("Error loading profiles:", pError);
+                throw new Error(`Perfiles: ${pError.message}`);
+            }
             if (profiles) {
                 setStudents(profiles.map(p => ({
                     id: p.id, dni: p.dni, apellidos: p.apellido, nombres: p.nombre,
@@ -125,17 +128,23 @@ export default function App() {
             }
 
             const { data: inst, error: iError } = await supabase.from('instrumentos').select('*');
-            if (iError) throw iError;
+            if (iError) {
+                console.error("Error loading instruments:", iError);
+                throw new Error(`Instrumentos: ${iError.message}`);
+            }
             if (inst) {
                 setInstrumentos(inst.map(i => ({
                     id: i.id,
                     instrumento: i.nombre,
                     plan: i.plan
-                })).sort((a, b) => a.instrumento.localeCompare(b.instrumento)));
+                })).sort((a, b) => (a.instrumento || "").localeCompare(b.instrumento || "")));
             }
 
             const { data: mats, error: mError } = await supabase.from('materias').select('*');
-            if (mError) throw mError;
+            if (mError) {
+                console.error("Error loading materias:", mError);
+                throw new Error(`Materias: ${mError.message}`);
+            }
             if (mats) {
                 setMaterias(mats.map(m => ({ id: m.id, plan: m.plan, anio: m.anio, nombre: m.nombre, materia: m.nombre })).sort((a, b) => (a.plan || "").localeCompare(b.plan || "") || (a.anio - b.anio)));
             }
@@ -143,7 +152,10 @@ export default function App() {
             await loadMatriculaciones();
 
             const { data: nts, error: nError } = await supabase.from('notas').select('*, materias(nombre), matriculaciones(perfiles!estudiante_id(dni))');
-            if (nError) throw nError;
+            if (nError) {
+                console.error("Error loading notes:", nError);
+                throw new Error(`Notas: ${nError.message}`);
+            }
             if (nts) {
                 setNotas(nts.map(n => ({
                     id: n.id,
