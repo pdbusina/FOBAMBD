@@ -171,7 +171,10 @@ export default function App() {
             }
         } catch (err) {
             console.error("Error loading data:", err);
-            if (!isSilent) showMessage("Error al cargar datos. Verifique su conexión.", true);
+            const errorMsg = (err.message?.includes("403") || err.message?.includes("Infinite loop") || err.message?.includes("policy"))
+                ? "Error de permisos (RLS). Por favor ejecute el script SQL de restauración en Supabase."
+                : `Error al cargar datos (${err.message}). Verifique su conexión y permisos en Supabase.`;
+            if (!isSilent) showMessage(errorMsg, true);
         } finally {
             if (!isSilent) setLoading(false);
         }
